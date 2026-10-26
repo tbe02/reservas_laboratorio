@@ -1,10 +1,12 @@
 {
   "permissions": {
+    "defaultMode": "default",
     "allow": [
       "Read",
       "Glob",
       "Grep",
       "Bash(python -m pytest:*)",
+      "Bash(.venv/bin/python -m pytest:*)",
       "Bash(pytest:*)",
       "Bash(git status)",
       "Bash(git diff:*)",

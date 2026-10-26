@@ -43,7 +43,9 @@ La especificación completa está en `README.md`, sección 1. Es la fuente de ve
 
 - Los tests usan siempre una base temporal (fixture con `tmp_path`); nunca `datos/reservas.db`.
 - No ejecutes la aplicación contra `datos/reservas.db`. Para probarla a mano, usá `RESERVAS_DB=/tmp/<nombre>.db`.
-- Antes de dar una etapa por terminada, ejecutá `python -m pytest -v` y mostrá la salida real.
+- Antes de dar una etapa por terminada, ejecutá `.venv/bin/python -m pytest -v` y mostrá la salida real.
+- Ejecutá pytest siempre con `.venv/bin/python -m pytest -v`: nunca dentro de un pipe ni con la salida filtrada (`| tail`, `| grep`, etc.), porque un pipe oculta el código de salida de pytest.
+- Si pytest no corre o falla, no se commitea.
 
 ## Honestidad en los resultados
 

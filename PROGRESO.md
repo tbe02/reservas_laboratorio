@@ -27,10 +27,11 @@ Python 3.14.8
 - **Modelo:** Claude Opus 5.5 (`claude-opus-5-5`). Esfuerzo alto: no aparece en `/status`, pero la interfaz de Claude Code muestra el indicador `high · /effort`.
 - **Configuración del proyecto:** "Shared project settings" confirma que se aplica `.claude/settings.json` del repositorio.
 - **Modo de permisos:** se trabaja en modo manual. Las reglas ask de `.claude/settings.json` obligan a pedir aprobación para editar, ejecutar la app y commitear, sea cual sea el modo activo (ver incidente).
-- **Incidente de permisos:** el modo automático estuvo activo sin intención desde el inicio de la sesión (etapas 0 y 1). En ese período, las ediciones y el commit igual pidieron aprobación por las reglas ask de `.claude/settings.json` (para el commit, el mensaje fue: 'Ask rule Bash(git commit:*) overrides auto mode for this command'). Se volvió al modo manual antes de la etapa 2.
+- **Incidente de permisos:** el modo automático estuvo activo sin intención desde el inicio de la sesión (etapas 0 y 1). En ese período, las ediciones y el commit igual pidieron aprobación por las reglas ask de `.claude/settings.json` (para el commit, el mensaje fue: 'Ask rule Bash(git commit:*) overrides auto mode for this command'). Se volvió al modo manual antes de la etapa 2. Al reiniciar Claude Code antes del cierre de la etapa 3, el modo automático volvió a quedar activo; se volvió otra vez a modo manual. Para que Claude Code arranque en modo manual en este proyecto, se agregó `"defaultMode": "default"` a `.claude/settings.json` (README §3.4).
+- **Incidente de verificación (pytest dentro de un pipe):** al cerrar la etapa 3, el agente corrió `python -m pytest -q 2>&1 | tail -1 && git add ... && git commit ...` en un solo comando. Después del reinicio el entorno virtual no estaba activado, así que `python` era `/usr/bin/python`, sin pytest: la salida fue `/usr/bin/python: No module named pytest`. Como el estado de salida del pipe es el de `tail`, el fallo no detuvo el `git add` ni el `git commit`, y el commit `4dc7f8d` se hizo sin la verificación. El agente lo informó en la misma respuesta y corrió `.venv/bin/python -m pytest -q` sobre lo commiteado: **90 passed in 0.28s**. Después de la última corrida del autor (90 passed) solo habían cambiado archivos de documentación. Para que no se repita, se agregó a `CLAUDE.md` (sección Pruebas): pytest se ejecuta siempre con `.venv/bin/python -m pytest -v`, nunca dentro de un pipe ni filtrado, y si pytest no corre o falla, no se commitea.
 - **Hueco en reglas de instalación (detectado y cerrado):** la regla ask `Bash(pip install:*)` probablemente no cubría variantes como `python -m pip install`, el comando que usó el agente para instalar pytest en la etapa 1 con el modo automático activo. No se pudo confirmar si esa instalación pidió aprobación: el agente no ve la pantalla de aprobación y el autor no lo recuerda. Para cubrir las variantes se agregaron a la lista ask de `.claude/settings.json`: `Bash(python -m pip install:*)`, `Bash(python3 -m pip install:*)` y `Bash(pip3 install:*)`.
 - **MCP:** 1 servidor conectado, `claude.ai Claude Docs` (8 herramientas), que proviene de la cuenta de claude.ai y no de la configuración del repositorio. No se usa en este proyecto: no se le pide al agente que lo utilice y todo el trabajo queda en archivos versionados del repositorio.
-- **Entorno de Python:** entorno virtual `.venv` creado con `python3 -m venv .venv` y activado antes de abrir Claude Code.
+- **Entorno de Python:** entorno virtual `.venv` creado con `python3 -m venv .venv` y activado antes de abrir Claude Code. El agente usa `.venv/bin/python` explícitamente, aunque el entorno no esté activado en la sesión (ver incidente de verificación).
 ---
 
 ## Etapas
@@ -40,7 +41,7 @@ Python 3.14.8
 | 0 | Especificación inicial y preparación del agente | Hecho | `6fd6135` |
 | 1 | Estructura, base de datos e inventario | Hecho | `1a43df8` |
 | 2 | Crear reserva y validaciones | Hecho | `51ef8a1` |
-| 3 | Superposición y disponibilidad | Pendiente | |
+| 3 | Superposición y disponibilidad | Hecho | `4dc7f8d` |
 | 4 | Cancelación | Pendiente | |
 | 5 | CLI (comandos, confirmaciones, códigos de salida) | Pendiente | |
 | 6 | Persistencia (test y procedimiento manual) | Pendiente | |

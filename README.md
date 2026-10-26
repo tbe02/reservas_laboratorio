@@ -58,7 +58,7 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | ID | Requisito |
 |---|---|
 | RF-01 | `unidades` muestra las 5 unidades del inventario. |
-| RF-02 | `disponibilidad UNIDAD --desde FECHA --hasta FECHA` indica si la unidad está libre en el intervalo y, si no lo está, lista las reservas activas que la bloquean. Libre, ocupada o no reservable son resultados informativos (ver S-15). |
+| RF-02 | `disponibilidad UNIDAD --desde FECHA --hasta FECHA` indica si la unidad está libre en el intervalo y, si no lo está, lista las reservas activas que la bloquean. Libre, ocupada o no reservable son resultados informativos (ver S-15 y S-18). |
 | RF-03 | `reservar UNIDAD --solicitante NOMBRE --inicio FECHA --fin FECHA` crea una reserva activa y devuelve su ID (`R-0001`, `R-0002`, …). |
 | RF-04 | `cancelar ID` muestra la reserva, pide confirmación (s/n) y la marca como cancelada sin borrarla. |
 | RF-05 | `listar [--unidad UNIDAD] [--estado activa\|cancelada]` muestra las reservas guardadas con las columnas ID, unidad, solicitante, inicio, fin y estado, ordenadas por inicio y luego por ID (ver S-16). |
@@ -105,6 +105,7 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | S-15 | **Códigos de salida de `disponibilidad`:** devuelve 0 siempre que la consulta se complete, esté la unidad libre, ocupada o el intervalo no sea reservable por estar en el pasado; el resultado es información, no un error. Devuelve 1 solo si hay datos inválidos (unidad desconocida, fecha mal escrita, inicio igual o posterior al fin) o la base no está inicializada. |
 | S-16 | **Salida de `listar`:** ordena por inicio ascendente y, si empatan, por ID. Columnas: ID, unidad, solicitante, inicio, fin, estado. Si no hay reservas, muestra `No hay reservas.` y devuelve 0. |
 | S-17 | **Base sin tablas:** si el archivo de la base existe pero no tiene las tablas, se trata como base no inicializada (S-09). |
+| S-18 | **Disponibilidad en el pasado y ocupada:** si el inicio del intervalo ya pasó y además hay reservas activas que se superponen, `disponibilidad` informa las dos cosas: que el intervalo no es reservable por estar en el pasado y las reservas que lo bloquean. Devuelve 0 (S-15). |
 
 ### 1.7 Criterios de aceptación
 
@@ -128,6 +129,7 @@ Cada criterio se verifica con una prueba automática, salvo indicación.
 | CA-14 | `disponibilidad` devuelve 0 con un intervalo libre, ocupado o en el pasado, y 1 con unidad desconocida, fecha mal escrita, inicio igual o posterior al fin o base no inicializada. | Automática |
 | CA-15 | `listar` muestra las reservas ordenadas por inicio y luego por ID, con las columnas de S-16. Sin reservas, muestra `No hay reservas.` y devuelve 0. | Automática |
 | CA-16 | Con un archivo de base existente pero sin tablas, los comandos distintos de `inicializar` muestran el error de base no inicializada y devuelven 1. | Automática |
+| CA-17 | Con un intervalo en el pasado que además se superpone con una reserva activa, `disponibilidad` informa que no es reservable, lista la reserva que lo bloquea y devuelve 0. | Automática |
 
 ### 1.8 Modelo de datos (SQLite)
 
@@ -225,9 +227,11 @@ Definidos en [`.claude/settings.json`](.claude/settings.json):
 
 | Nivel | Acciones | Motivo |
 |---|---|---|
-| Permitido sin preguntar | Leer y buscar archivos; ejecutar pytest; `git status`, `git diff`, `git log` | Acciones sin efectos sobre el código |
+| Permitido sin preguntar | Leer y buscar archivos; ejecutar pytest (`python -m pytest`, `pytest` y `.venv/bin/python -m pytest`); `git status`, `git diff`, `git log` | Acciones sin efectos sobre el código |
 | Requiere aprobación | Editar o crear archivos; ejecutar la aplicación; `git add`, `git commit`; instalar paquetes | El humano revisa cada cambio antes de aceptarlo |
 | Prohibido | `git push`; `rm -rf`; leer archivos `.env` | La publicación la hace el humano; se evitan borrados y lectura de secretos |
+
+**Modo de inicio:** `"defaultMode": "default"` hace que Claude Code arranque en modo manual en este proyecto. No impide cambiar de modo durante la sesión, y lo puede reemplazar una configuración de mayor prioridad (por ejemplo, `.claude/settings.local.json` o un modo indicado al iniciar Claude Code). Las reglas ask siguen vigentes aunque cambie el modo: en el [incidente de permisos](PROGRESO.md#entorno-evidencia), la regla de `git commit` pidió aprobación con el modo automático activo.
 
 **Revisión humana:** en cada etapa, el autor revisa el diff, ejecuta él mismo `python -m pytest -v` y decide si acepta, corrige o rechaza antes del commit. Ver [PROGRESO.md](PROGRESO.md).
 
@@ -242,7 +246,8 @@ Instrucciones incluidas en `CLAUDE.md` para este problema:
 Evidencia de uso:
 
 - **Adaptación 1 (turnos consecutivos):** [prueba de mutación en PROGRESO.md](PROGRESO.md#prueba-de-mutación-turnos-consecutivos): con `<=`/`>=` en la consulta de superposición fallan 6 tests; sin el filtro de reservas activas falla 1. Tests de turnos consecutivos en [`tests/test_superposicion.py`](tests/test_superposicion.py): `test_consigna_permite_mic01_de_11_a_12`, `test_turno_consecutivo_anterior_se_permite` y `test_disponibilidad_coincide_con_crear_reserva` (casos consecutivos).
-- **Adaptaciones 2 y 3:** pendiente, se enlazará en [PROGRESO.md](PROGRESO.md) a los commits y tests correspondientes.
+- **Adaptación 2 (persistencia):** pendiente, se enlazará en [PROGRESO.md](PROGRESO.md) a los commits y tests correspondientes.
+- **Adaptación 3 (el "ahora" como parámetro):** el autor verificó con `grep -rn "environ" reservas/` que la única variable de entorno que se lee es `RESERVAS_DB` ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 2). Tests del camino `ahora=None` en [`tests/test_crear_reserva.py`](tests/test_crear_reserva.py): `test_ahora_none_acepta_una_reserva_en_2099` y `test_ahora_none_rechaza_una_reserva_en_2000`.
 
 ### 3.6 Retención del progreso
 
