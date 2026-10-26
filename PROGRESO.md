@@ -44,7 +44,7 @@ Python 3.14.8
 | 2 | Crear reserva y validaciones | Hecho | `51ef8a1` |
 | 3 | Superposición y disponibilidad | Hecho | `4dc7f8d` |
 | 4 | Cancelación | Hecho | `0665a5d` |
-| 5 | CLI (comandos, confirmaciones, códigos de salida) | Pendiente | |
+| 5 | CLI (comandos, confirmaciones, códigos de salida) | Hecho | `fb8f240` |
 | 6 | Persistencia (test y procedimiento manual) | Pendiente | |
 | 7 | Completar sección 2 del README | Pendiente | |
 
@@ -125,16 +125,16 @@ Python 3.14.8
 - **Archivos:** `reservas/cli.py` (nuevo), `reservas/__main__.py` (nuevo), `reservas/reglas.py`, `reservas/persistencia.py`, `tests/test_cli.py` (nuevo).
 - **Pytest (informado por el agente):** `.venv/bin/python -m pytest -v` → 164 passed in 1.91s (53 de `test_cli.py`).
 - **Tests de la CLI:** 51 llaman a `main()` con `ahora` fijo y respuestas simuladas (CA-01, CA-11 a CA-18 por CLI, confirmaciones afirmativas y negativas, base no inicializada y sin tablas, errores sin traza, argumentos inválidos). 2 de punta a punta ejecutan `python -m reservas` en un proceso aparte con `RESERVAS_DB` temporal y la hora real (fechas de 2030 en la primera versión; pasadas a 2099 tras la revisión): reservar/choque/consecutiva/listar, y cancelar con `n` y `s` por la entrada estándar.
-- **Prueba manual del agente:** `RESERVAS_DB=/tmp/reservas_etapa5.db .venv/bin/python -m reservas …` (listar sin base, inicializar, unidades, reservas válidas, choque, consecutiva, otra unidad, disponibilidad ocupada/libre/pasada, fecha inexistente, cancelar con `n` y con `s`, doble cancelación, listar con filtros, inicializar con `n`, argumentos inválidos y `--help`). Todos los resultados y códigos de salida fueron los esperados. `datos/` siguió conteniendo solo `inventario.csv`.
-- **Pytest (ejecutado por el autor):** `.venv/bin/python -m pytest -v` → 164 passed in 1.71s (versión anterior al cambio de fechas de los tests de punta a punta).
+- **Prueba manual del agente:** con `export RESERVAS_DB=/tmp/reservas_etapa5.db` y una función de shell que ejecutaba `$P -m reservas …` con `P=.venv/bin/python`, no con el comando literal (ver "Hueco en la regla de ejecución de la app" en Entorno). Se probó: listar sin base, inicializar, unidades, reservas válidas, choque, consecutiva, otra unidad, disponibilidad ocupada/libre/pasada, fecha inexistente, cancelar con `n` y con `s`, doble cancelación, listar con filtros, inicializar con `n`, argumentos inválidos y `--help`. Todos los resultados y códigos de salida fueron los esperados. `datos/` siguió conteniendo solo `inventario.csv`.
+- **Pytest (ejecutado por el autor):** `.venv/bin/python -m pytest -v` → 164 passed in 1.71s (versión anterior a pasar los tests de punta a punta a 2099 y a editar `CLAUDE.md`).
 - **Prueba manual del autor:** con `RESERVAS_DB=/tmp/prueba_theo.db` y `.venv/bin/python`: `inicializar` creó la base; `unidades` listó las 5; se creó R-0001 (MIC-01 10–11); 10:30–11:30 dio error de choque con R-0001; se creó R-0002 (11–12); `disponibilidad` de 10 a 12 listó R-0001 y R-0002; `cancelar R-0001` mostró la reserva, se respondió `s` y la canceló; `listar` mostró R-0001 cancelada y R-0002 activa.
 - **Revisión humana:** se revisó el informe y las decisiones; se detectó que los tests de punta a punta con hora real usaban fechas de 2030; se probó la app a mano.
 - **Decisiones:** D-27 a D-30, propuestas por el agente y aprobadas por el autor; agregadas a `DECISIONES.md`.
 - **Cambios tras la revisión:** los 2 tests de punta a punta pasaron de fechas de 2030 a 2099 (con hora real habrían empezado a fallar en noviembre de 2030), con un comentario que los marca como excepción a la regla de fecha fija de `CLAUDE.md`. Se agregó `Bash(.venv/bin/python -m reservas:*)` a la lista ask de `.claude/settings.json` y se actualizó README §3.4 (ver "Hueco en la regla de ejecución de la app" en Entorno).
 - **Pytest después de los cambios (agente):** `.venv/bin/python -m pytest -v` → 164 passed in 1.84s.
-- **Pytest sobre la versión final (autor, previo al commit):** `.venv/bin/python -m pytest -v` → 164 passed in 1.72s.
+- **Pytest sobre el commit `fb8f240` (autor):** `.venv/bin/python -m pytest -v` → 164 passed in 1.72s.
 - **`CLAUDE.md` (antes del commit, a pedido del autor):** las fechas de 2030 quedan solo para tests con `ahora` fijo; los tests con hora real y los ejemplos manuales del README usan 2099. La app y pytest se invocan siempre con el comando literal (`.venv/bin/python -m …`), nunca mediante variables ni funciones de shell, para que se apliquen las reglas de permisos.
-- **Pendientes:** etapa 6 (test de cierre y reapertura y procedimiento manual de persistencia).
+- **Pendientes:** etapa 6 (test de cierre y reapertura y procedimiento manual de persistencia). En el procedimiento manual del README (etapas 6 y 7), `RESERVAS_DB` se define con `export RESERVAS_DB=/tmp/...` en una línea aparte y después van los comandos literales (`.venv/bin/python -m reservas …`), como en la prueba manual del autor.
 
 ---
 
@@ -154,8 +154,8 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 | 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 4 (antes de D-25 y D-26) | 106 passed in 0.32s | Autor |
 | 2026-10-26 | `grep -rn -i "delete" reservas/` | Etapa 4 | Solo el docstring de `reservas/persistencia.py:3` ("Nunca se ejecuta DELETE sobre `reservas`") y el `.pyc` compilado. No hay `DELETE` en el código. | Autor |
 | 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 4, versión final (previa al commit) | 111 passed in 0.33s | Autor |
-| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 5 (antes de pasar los tests de punta a punta a 2099) | 164 passed in 1.71s | Autor |
-| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 5, versión final (previa al commit) | 164 passed in 1.72s | Autor |
+| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 5 (antes de pasar los tests de punta a punta a 2099 y de editar `CLAUDE.md`) | 164 passed in 1.71s | Autor |
+| 2026-10-26 | `.venv/bin/python -m pytest -v` | `fb8f240` (etapa 5) | 164 passed in 1.72s | Autor |
 | 2026-10-26 | Prueba manual de la CLI con `RESERVAS_DB=/tmp/prueba_theo.db` y `.venv/bin/python -m reservas`: `inicializar`, `unidades`, `reservar` (R-0001 MIC-01 10–11), `reservar` 10:30–11:30, `reservar` (R-0002 11–12), `disponibilidad` 10–12, `cancelar R-0001` con `s`, `listar` | Etapa 5 | Base creada; 5 unidades; R-0001 creada; choque con R-0001; R-0002 creada; disponibilidad listó R-0001 y R-0002; cancelar mostró la reserva y la canceló; `listar`: R-0001 cancelada y R-0002 activa | Autor |
 
 ---
