@@ -36,7 +36,7 @@ Python 3.14.8
 | # | Etapa | Estado | Commit |
 |---|---|---|---|
 | 0 | Especificación inicial y preparación del agente | Hecho | `6fd6135` |
-| 1 | Estructura, base de datos e inventario | Pendiente | |
+| 1 | Estructura, base de datos e inventario | Hecho | `1a43df8` |
 | 2 | Crear reserva y validaciones | Pendiente | |
 | 3 | Superposición y disponibilidad | Pendiente | |
 | 4 | Cancelación | Pendiente | |
@@ -106,7 +106,7 @@ Registrar solo episodios reales, en el momento en que ocurren. No inventar falla
 - **Acción o resultado del agente:** resumió correctamente los 6 comandos, la regla `inicio_A < fin_B and fin_A > inicio_B` con comparación estricta, que cancelar no borra y el "ahora" como parámetro. Propuso un plan de 7 etapas y detectó 5 huecos: reinicio vs. IDs no reutilizables y prohibición de DELETE, `inicializar` sin reservas, código de salida de `disponibilidad` cuando está ocupada, orden y columnas de `listar`, y archivo de base sin tablas. Ofreció unir las etapas 2 y 3.
 - **Decisión humana:** aceptar el resumen y el plan; resolver los 5 huecos; rechazar la unión de etapas 2 y 3.
 - **Motivo:** los huecos eran ambigüedades reales que habrían obligado al agente a suponer. Se mantuvieron las etapas separadas para revisar las validaciones y la regla de superposición por separado.
-- **Evidencia:** commit `COMPLETAR` (README §1 y DECISIONES.md D-16 en adelante).
+- **Evidencia:** commit `1191b03` (README §1 y DECISIONES.md D-16 en adelante).
 
 ### Episodio 2 · Import fuera de lugar y conexión sin cerrar en `persistencia.py`
 
@@ -116,7 +116,7 @@ Registrar solo episodios reales, en el momento en que ocurren. No inventar falla
 - **Acción o resultado del agente:** escribió el import de `ErrorBaseNoInicializada` al final de `persistencia.py` con `# noqa: E402`, sin que hubiera importación circular. En el mismo turno, antes de cualquier revisión humana, se corrigió solo y movió el import arriba. Al corregirlo detectó y arregló además que `abrir_base` no cerraba la conexión ante un archivo que no es SQLite.
 - **Decisión humana:** revisar en la pantalla de aprobación las ediciones de corrección (import movido arriba sin noqa y `conexion.close()` en `abrir_base`) y aceptarlas.
 - **Motivo:** el resultado final es correcto. El error de origen muestra que hace falta revisar el código del agente aunque los tests pasen: la primera versión también los habría pasado.
-- **Evidencia:** commit `COMPLETAR`; test `tests/test_persistencia.py::test_abrir_archivo_que_no_es_sqlite_se_trata_como_no_inicializada`.
+- **Evidencia:** commit `1a43df8`; test `tests/test_persistencia.py::test_abrir_archivo_que_no_es_sqlite_se_trata_como_no_inicializada`.
 
 ### Episodio 3 · Pedido de registrar un rechazo humano que no ocurrió
 
