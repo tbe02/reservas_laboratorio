@@ -1,0 +1,26 @@
+# Base de datos local (se genera con `python -m reservas inicializar`)
+datos/*.db
+datos/*.db-journal
+datos/*.db-wal
+datos/*.db-shm
+
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secretos
+.env
+.env.*
+
+# Configuración local de Claude Code (no versionada)
+.claude/settings.local.json
+
+# Sistema / editores
+.DS_Store
+.vscode/
+.idea/

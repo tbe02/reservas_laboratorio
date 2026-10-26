@@ -1,0 +1,122 @@
+# Registro de decisiones
+
+Cada decisión indica contexto, decisión, alternativas consideradas y consecuencias.
+
+Las decisiones D-01 a D-15 se tomaron en la **fase de planificación**, antes de que el agente de programación escribiera código. Esa planificación se hizo en una conversación de chat aparte (no incluida en el repositorio); estas decisiones **no** son episodios de delegación. Los episodios se registran en [PROGRESO.md](PROGRESO.md#episodios-de-delegación).
+
+Las decisiones nuevas que surjan durante la construcción se agregan al final con el commit correspondiente.
+
+---
+
+## D-01 · Lenguaje: Python 3.14 con pytest
+
+- **Contexto:** la consigna deja libre el lenguaje y exige pruebas automáticas reproducibles sin la cuenta del autor.
+- **Decisión:** Python 3.14 (versión instalada: 3.14.8) y pytest como única dependencia externa.
+- **Alternativas:** JavaScript/Node con Jest; Java con JUnit; C# con xUnit.
+- **Consecuencias:** pocas dependencias y `sqlite3` incluido en la biblioteca estándar. Se requiere Python 3.14 o compatible para reproducir.
+
+## D-02 · Interfaz: CLI
+
+- **Contexto:** la consigna acepta consola o API local; la interfaz gráfica no es obligatoria y un frente complejo queda fuera de alcance.
+- **Decisión:** CLI con `argparse`, ejecutada como `python -m reservas <comando>`.
+- **Alternativas:** API REST local con FastAPI; ambas sobre un núcleo común; interfaz gráfica.
+- **Consecuencias:** sin servidor ni dependencias extra; el corrector reproduce todo copiando comandos. Menos "realista" que una API, pero suficiente para el alcance.
+
+## D-03 · Persistencia: SQLite
+
+- **Contexto:** hay que conservar reservas y estados entre ejecuciones.
+- **Decisión:** un archivo SQLite (`datos/reservas.db`, excluido de Git), configurable con la variable de entorno `RESERVAS_DB`.
+- **Alternativas:** archivo JSON; CSV.
+- **Consecuencias:** transacciones y restricciones (`CHECK`) nativas, sin servidor. El archivo no es legible a simple vista como un JSON.
+
+## D-04 · Intervalos semiabiertos `[inicio, fin)` con comparación estricta
+
+- **Contexto:** la consigna exige rechazar superposiciones y permitir límites consecutivos (10–11 y 11–12).
+- **Decisión:** dos reservas activas de la misma unidad chocan si y solo si `inicio_A < fin_B` y `fin_A > inicio_B`.
+- **Alternativas:** intervalos cerrados `[inicio, fin]` con `<=`, que harían chocar los turnos consecutivos.
+- **Consecuencias:** los turnos consecutivos se permiten sin casos especiales. Es la adaptación específica principal en `CLAUDE.md`.
+
+## D-05 · Una sola función de conflictos para reservar y consultar
+
+- **Contexto:** la consigna pide que la disponibilidad use las mismas reglas que la creación.
+- **Decisión:** `reservar` y `disponibilidad` usan la misma función para detectar conflictos.
+- **Alternativas:** implementar la consulta por separado.
+- **Consecuencias:** es imposible que una diga "libre" y la otra rechace. Se verifica con CA-09.
+
+## D-06 · Fechas en hora de Buenos Aires, formato `AAAA-MM-DD HH:MM`, guardadas como texto
+
+- **Contexto:** la consigna pide documentar zona horaria y formato.
+- **Decisión:** todas las fechas se interpretan en `America/Argentina/Buenos_Aires` y se guardan como texto con formato fijo.
+- **Alternativas:** UTC con ISO 8601; formato `DD/MM/AAAA`.
+- **Consecuencias:** con formato y zona únicos, el texto se ordena y compara correctamente en SQL y es legible. No se soportan otras zonas horarias.
+
+## D-07 · Rechazar reservas en el pasado
+
+- **Contexto:** la consigna pide documentar el tratamiento de fechas pasadas.
+- **Decisión:** el inicio de una reserva nueva debe ser posterior al momento actual.
+- **Alternativas:** permitir reservas pasadas (registro retroactivo).
+- **Consecuencias:** el historial no se llena de reservas imposibles. Obliga a controlar el "ahora" en las pruebas (ver D-08).
+
+## D-08 · El "ahora" como parámetro, no como variable de entorno
+
+- **Contexto:** con D-07, las pruebas dependerían de la fecha en que se ejecutan. Se propuso inicialmente una variable de entorno `RESERVAS_AHORA` para fijar la hora.
+- **Decisión:** descartar `RESERVAS_AHORA`. Las funciones reciben `ahora=None` como parámetro opcional; la CLI siempre usa la hora real y los tests pasan una fecha fija.
+- **Alternativas:** variable de entorno `RESERVAS_AHORA`; reemplazar la función de hora en los tests (monkeypatch).
+- **Motivo del cambio:** la variable de entorno permitía que cualquier usuario salteara la regla de fechas pasadas escribiendo una fecha falsa delante del comando.
+- **Consecuencias:** la regla no se puede saltear desde la CLI y las pruebas son reproducibles. Los ejemplos manuales usan fechas de 2030. Si el reloj del sistema está mal, el sistema usa esa hora (limitación declarada).
+
+## D-09 · Sin límites de duración ni anticipación
+
+- **Contexto:** la consigna pide documentar estos límites "si se aplican".
+- **Decisión:** no se aplican; una reserva puede cruzar la medianoche.
+- **Alternativas:** duración máxima (ej. 8 h); anticipación máxima (ej. 90 días); bloques de 15/30 min.
+- **Consecuencias:** menos reglas y supuestos que justificar. Una reserva podría bloquear una unidad por un período muy largo.
+
+## D-10 · Cancelar cambia el estado; nunca se borra
+
+- **Contexto:** la consigna pide cancelar conservando identificador y datos.
+- **Decisión:** cancelar = `UPDATE` del estado a `cancelada` y registro de `cancelada_en`. Se prohíbe `DELETE` sobre `reservas`.
+- **Alternativas:** borrar la fila; mover la reserva a una tabla de histórico.
+- **Consecuencias:** historial completo en una sola tabla. Las consultas de conflicto deben filtrar `estado = 'activa'`.
+
+## D-11 · IDs consecutivos con `AUTOINCREMENT`, mostrados como `R-0001`
+
+- **Contexto:** cada reserva debe ser identificable.
+- **Decisión:** clave entera `AUTOINCREMENT`, presentada como `R-` más cuatro dígitos.
+- **Alternativas:** UUID; ID compuesto por unidad y fecha.
+- **Consecuencias:** IDs cortos y fáciles de escribir; nunca se reutilizan, ni siquiera tras cancelar.
+
+## D-12 · Confirmación solo en acciones irreversibles; sin `--forzar`
+
+- **Contexto:** `inicializar` borra datos y `cancelar` no se puede deshacer (no existe reactivar). Se había propuesto un parámetro `--forzar` para omitir la confirmación.
+- **Decisión:** `inicializar` (si hay reservas) y `cancelar` piden confirmación (s/n); cualquier respuesta que no sea afirmativa se toma como "no". Se descarta `--forzar`. `reservar` y las consultas no preguntan.
+- **Alternativas:** confirmar todo; no confirmar nada; mantener `--forzar`.
+- **Motivo:** `--forzar` solo servía para automatizar, y las pruebas llaman al código directamente. Confirmar todo haría que el usuario responda sin leer.
+- **Consecuencias:** se evitan cancelaciones por un ID mal escrito. Los tests de CLI deben simular la respuesta.
+
+## D-13 · Verificar e insertar en una misma transacción
+
+- **Contexto:** entre verificar disponibilidad e insertar podría colarse otra reserva.
+- **Decisión:** usar `BEGIN IMMEDIATE` para la verificación y la inserción.
+- **Alternativas:** verificar e insertar por separado.
+- **Consecuencias:** no puede quedar guardada una superposición, incluso con dos procesos locales. No se busca soportar concurrencia distribuida (fuera de alcance).
+
+## D-14 · Códigos de salida 0/1 además de los mensajes
+
+- **Contexto:** la consigna no lo exige; los mensajes en español siempre se muestran.
+- **Decisión:** 0 si la operación se completa; 1 si hay error o no se confirma.
+- **Alternativas:** solo mensajes.
+- **Consecuencias:** las pruebas de CLI pueden comprobar el resultado sin depender del texto exacto.
+
+## D-15 · Agente: Claude Code con Opus 5.5 (esfuerzo alto) y aprobación humana
+
+- **Contexto:** la consigna exige un agente que actúe sobre el repositorio con herramientas reales y documentar permisos y controles.
+- **Decisión:** Claude Code 2.1.309; edición de archivos, ejecución de la app y commits requieren aprobación; `git push` está prohibido.
+- **Alternativas:** auto-aceptar ediciones y revisar después; aprobar todo, incluso correr tests.
+- **Consecuencias:** cada cambio pasa por revisión humana antes de aceptarse, lo que deja evidencia del control. El trabajo es más lento.
+
+---
+
+## Decisiones durante la construcción
+
+<!-- Agregar aquí: D-16, D-17... con el commit o test que la respalda. -->
