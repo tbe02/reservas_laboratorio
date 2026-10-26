@@ -3,7 +3,7 @@
 Sistema local de reservas de equipos de laboratorio, construido con un agente de programación (Claude Code).
 
 **Autor:** Theo Benjamín Echeverría
-**Estado:** especificación inicial. El código todavía no existe; se construye por etapas (ver [PROGRESO.md](PROGRESO.md)).
+**Estado:** aplicación completa según la especificación (§1): CLI con los 6 comandos, 165 pruebas automáticas y procedimiento manual de persistencia ejecutado por el autor. Construida por etapas, con historial y verificaciones en [PROGRESO.md](PROGRESO.md).
 
 El README tiene cuatro secciones:
 
@@ -175,26 +175,282 @@ La versión inicial de esta especificación es el primer commit del repositorio.
 
 ## 2. Solución
 
-> Pendiente: se completa a medida que se construye (etapa 7 de [PROGRESO.md](PROGRESO.md)). Solo se incluirán salidas de comandos realmente ejecutados. Ya está escrito el [procedimiento manual de persistencia](#procedimiento-manual-de-persistencia-ca-10) (etapa 6).
+Todas las salidas de esta sección son de comandos realmente ejecutados el 2026-10-26. Los ejemplos de [2.7](#27-comandos) salen de una corrida contra `/tmp/reservas_readme.db`, y los del [procedimiento manual](#29-procedimiento-manual-de-persistencia-ca-10), de las corridas del agente y del autor.
 
-Contenido previsto:
+### 2.1 Estructura del proyecto
 
-- **Estructura del proyecto.**
-- **Requisitos previos:** Linux, Python 3.14.8 y las dependencias de `requirements.txt` (versiones fijas).
-- **Instalación:**
+```
+reservas_laboratorio/
+├── README.md                 especificación (§1), solución (§2) y preparación del agente (§3)
+├── CLAUDE.md                 instrucciones del proyecto para el agente
+├── PROGRESO.md               etapas, bitácora, verificaciones y episodios de delegación
+├── DECISIONES.md             registro de decisiones técnicas (D-01 a D-30)
+├── requirements.txt          dependencia única con versión fija: pytest==9.1.1
+├── .gitignore                excluye la base de datos, el entorno virtual y los secretos
+├── .claude/settings.json     permisos del agente (permitido, requiere aprobación, prohibido)
+├── datos/
+│   ├── inventario.csv        las 5 unidades del inventario (versionado)
+│   └── reservas.db           base SQLite; la crea `inicializar` (no se versiona)
+├── reservas/                 paquete de la aplicación
+│   ├── __init__.py           marca el paquete
+│   ├── __main__.py           punto de entrada de `python -m reservas`
+│   ├── cli.py                capa CLI: argumentos, confirmaciones, salida y códigos de salida
+│   ├── reglas.py             capa de reglas de negocio: validaciones, disponibilidad, reservar, cancelar, listar
+│   ├── persistencia.py       capa de persistencia: esquema SQLite, consultas y transacciones
+│   └── errores.py            excepciones con mensajes en español para el usuario
+└── tests/
+    ├── conftest.py           base temporal por test (`tmp_path`)
+    ├── test_persistencia.py  esquema, inventario, base no inicializada, cierre y reapertura
+    ├── test_crear_reserva.py validaciones de RN-01 a RN-05
+    ├── test_superposicion.py superposición, turnos consecutivos, disponibilidad y transacción
+    ├── test_cancelar_reserva.py  cancelación sin borrar, errores y reservas ya empezadas
+    └── test_cli.py           los 6 comandos, confirmaciones, códigos de salida y 2 pruebas de punta a punta
+```
+
+**Capas.** La CLI no contiene reglas de negocio: solo interpreta los argumentos, pide confirmaciones y muestra resultados.
+
+- **CLI** (`cli.py`) llama a las reglas.
+- **Reglas** (`reglas.py`) validan los datos y deciden qué se puede hacer.
+- **Persistencia** (`persistencia.py`) accede a SQLite.
+
+La detección de superposición es una sola consulta (`persistencia.buscar_conflictos`), que usan tanto `reservar` como `disponibilidad` a través de `reglas.consultar_disponibilidad`.
+
+### 2.2 Decisiones técnicas (resumen)
+
+El detalle, con alternativas y consecuencias, está en [DECISIONES.md](DECISIONES.md).
+
+| Tema | Decisión | Ref. |
+|---|---|---|
+| Lenguaje, interfaz y datos | Python 3.14 + pytest; CLI con `argparse`; SQLite (`sqlite3` de la biblioteca estándar) | D-01 a D-03 |
+| Superposición | Intervalos `[inicio, fin)` con comparación estricta; una sola función para reservar y consultar | D-04, D-05 |
+| Fechas | Hora de Buenos Aires, formato `AAAA-MM-DD HH:MM`, guardadas como texto; no se recortan espacios | D-06, D-23 |
+| El "ahora" | No se reserva en el pasado; el "ahora" es un parámetro de las funciones, nunca una variable de entorno ni un argumento | D-07, D-08, D-22 |
+| Historial | Cancelar es `UPDATE`, nunca `DELETE`; no se cancelan reservas ya empezadas | D-10, D-26 |
+| IDs | Enteros consecutivos mostrados como `R-0001`; `R-1` es la misma reserva | D-11, D-25 |
+| Confirmaciones | Solo en `inicializar` (si hay reservas) y `cancelar`; mayúsculas y espacios no importan; sin entrada es "no" | D-12, D-17, D-28 |
+| Transacciones | Verificar e insertar dentro de `BEGIN IMMEDIATE` | D-13 |
+| Reinicio | `inicializar` borra el archivo de la base y los IDs vuelven a `R-0001` | D-16 |
+| Rutas | Ruta por defecto relativa a la raíz del proyecto; otra ruta con `RESERVAS_DB` | D-03, D-21 |
+| CLI | Código de salida 0/1, también para errores de argumentos; `disponibilidad` devuelve 0 si la consulta se completa; `cancelar` valida antes de preguntar | D-14, D-18, D-29, D-30 |
+| Salida | `listar` ordena por inicio y luego por ID; en el pasado y ocupado se informan ambas cosas | D-19, D-24, D-27 |
+
+### 2.3 Requisitos previos
+
+| Requisito | Versión usada | Comprobación |
+|---|---|---|
+| Sistema operativo | Linux | — |
+| Python | 3.14.8 | `python3 --version` → `Python 3.14.8` |
+| pytest (única dependencia) | 9.1.1 (fija en `requirements.txt`) | `.venv/bin/python -m pytest --version` → `pytest 9.1.1` |
+| Base de datos de zonas horarias del sistema | la del sistema operativo | `ls /usr/share/zoneinfo/America/Argentina/Buenos_Aires` (la usa `zoneinfo`) |
+
+pip instala además las dependencias de pytest (`iniconfig`, `packaging`, `pluggy`, `pygments`). Esas no tienen versión fija en `requirements.txt`.
+
+### 2.4 Instalación desde cero
+
+```bash
+git clone https://github.com/tbe02/reservas_laboratorio.git
+cd reservas_laboratorio
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Con el entorno activado, `python -m reservas …` equivale a `.venv/bin/python -m reservas …`. Los ejemplos de esta sección usan la forma explícita, que funciona aunque el entorno no esté activado.
+
+Estos pasos se verificaron clonando el repositorio local en una carpeta nueva (commit `55fe6df`): `git clone`, `python3 -m venv .venv`, `source .venv/bin/activate`, `pip install -r requirements.txt` (`Successfully installed iniconfig-2.3.1 packaging-26.3 pluggy-1.7.0 pygments-2.21.0 pytest-9.1.1`) y `.venv/bin/python -m pytest -v` → `165 passed in 2.00s`. pip tomó los paquetes de su caché local, así que la descarga desde la red no se verificó en esa prueba.
+
+### 2.5 Carga inicial y reinicio de datos
+
+```bash
+.venv/bin/python -m reservas inicializar
+```
+
+Crea la base y carga las 5 unidades de `datos/inventario.csv`. Si la base no existe o no tiene reservas, la crea sin preguntar:
+
+```
+Base de datos creada en /tmp/reservas_readme.db con las unidades del inventario.
+```
+
+> ⚠️ **Reiniciar BORRA TODAS LAS RESERVAS.** Si la base ya tiene reservas, `inicializar` informa cuántas hay y pide confirmación. Solo `s`, `si` o `sí` confirman; cualquier otra respuesta cancela y no modifica nada. Al confirmar, se borra el archivo de la base, se crea de nuevo y los IDs vuelven a empezar en `R-0001`. Esto no se puede deshacer.
+
+```
+$ echo n | .venv/bin/python -m reservas inicializar
+La base tiene 3 reservas. Si continuás, se borrarán todas.
+¿Reiniciar la base? (s/n): Operación cancelada. No se modificó la base.
+código: 1
+```
+
+En los ejemplos con `echo n |` o `echo s |`, la respuesta llega por la entrada estándar y por eso no aparece escrita después de la pregunta. En una terminal interactiva se escribe a mano.
+
+Si se ejecuta cualquier otro comando sin haber inicializado la base, aparece:
+
+```
+Error: La base de datos no está inicializada. Ejecutá: python -m reservas inicializar
+código: 1
+```
+
+### 2.6 Dónde persisten los datos
+
+- **Por defecto:** en `datos/reservas.db`, dentro del repositorio. La ruta se calcula desde la carpeta que contiene `reservas/`, no desde la carpeta actual (D-21). El archivo está excluido de Git en `.gitignore` (`datos/*.db` y sus archivos auxiliares `-journal`, `-wal`, `-shm`).
+- **Otra ruta:** con la variable de entorno `RESERVAS_DB`, por ejemplo para pruebas que no deben tocar la base real:
+
   ```bash
-  python3 -m venv .venv
-  source .venv/bin/activate
-  pip install -r requirements.txt
+  export RESERVAS_DB=/tmp/mi_prueba.db
+  .venv/bin/python -m reservas inicializar
   ```
-- **Carga inicial y reinicio de datos:** `python -m reservas inicializar`. ⚠️ Reiniciar **borra todas las reservas** (pide confirmación).
-- **Dónde persisten los datos:** `datos/reservas.db` (excluido de Git). Se puede usar otra ruta con la variable de entorno `RESERVAS_DB`.
-- **Comandos de la aplicación** con ejemplos de entrada y salida.
-- **Pruebas:** `python -m pytest -v`.
-- **Procedimiento manual de persistencia** con resultados esperados y observados.
-- **Pendientes y limitaciones.**
 
-### Procedimiento manual de persistencia (CA-10)
+  Si `RESERVAS_DB` es una ruta relativa, se toma desde la carpeta actual.
+
+### 2.7 Comandos
+
+Los 6 comandos, con un ejemplo de entrada y salida cada uno. Se ejecutaron en este orden con `export RESERVAS_DB=/tmp/reservas_readme.db`, y después de cada comando se mostró el código de salida con `echo "código: $?"`. Las fechas son de 2099 porque no se puede reservar en el pasado; el ejemplo de "no reservable" usa a propósito una fecha de 2020.
+
+```
+$ .venv/bin/python -m reservas --help
+uso: python -m reservas [-h] COMANDO ...
+
+Reservas de equipos de laboratorio.
+
+opciones:
+  -h, --help        muestra esta ayuda y termina
+
+comandos:
+  COMANDO
+    inicializar     crea la base y carga el inventario (borra las reservas)
+    unidades        muestra las unidades del inventario
+    disponibilidad  indica si una unidad está libre en un intervalo
+    reservar        crea una reserva
+    cancelar        cancela una reserva
+    listar          muestra las reservas guardadas
+código: 0
+```
+
+**`inicializar`:** ver [2.5](#25-carga-inicial-y-reinicio-de-datos).
+
+**`unidades`:** muestra las 5 unidades del inventario.
+
+```
+$ .venv/bin/python -m reservas unidades
+ID      Equipo
+MIC-01  Microscopio digital
+MIC-02  Microscopio digital
+OSC-01  Osciloscopio
+MUL-01  Multímetro
+FUE-01  Fuente de alimentación
+código: 0
+```
+
+**`reservar UNIDAD --solicitante NOMBRE --inicio FECHA --fin FECHA`:** crea una reserva activa y muestra su ID. Las fechas van entre comillas porque tienen un espacio.
+
+```
+$ .venv/bin/python -m reservas reservar MIC-01 --solicitante "Ana Prueba" --inicio "2099-11-03 10:00" --fin "2099-11-03 11:00"
+Reserva creada: R-0001 (MIC-01, 2099-11-03 10:00 a 2099-11-03 11:00, Ana Prueba).
+código: 0
+
+$ .venv/bin/python -m reservas reservar MIC-01 --solicitante "Beto Prueba" --inicio "2099-11-03 10:30" --fin "2099-11-03 11:30"
+Error: La unidad MIC-01 ya está reservada en ese horario: R-0001 (2099-11-03 10:00 a 2099-11-03 11:00).
+código: 1
+
+$ .venv/bin/python -m reservas reservar MIC-01 --solicitante "Beto Prueba" --inicio "2099-11-03 11:00" --fin "2099-11-03 12:00"
+Reserva creada: R-0002 (MIC-01, 2099-11-03 11:00 a 2099-11-03 12:00, Beto Prueba).
+código: 0
+
+$ .venv/bin/python -m reservas reservar MIC-02 --solicitante "Caro Prueba" --inicio "2099-11-03 10:00" --fin "2099-11-03 11:00"
+Reserva creada: R-0003 (MIC-02, 2099-11-03 10:00 a 2099-11-03 11:00, Caro Prueba).
+código: 0
+
+$ .venv/bin/python -m reservas reservar MIC-01 --solicitante "Ana Prueba" --inicio "2099-02-30 10:00" --fin "2099-02-30 11:00"
+Error: La fecha de inicio '2099-02-30 10:00' no es una fecha válida.
+código: 1
+```
+
+Es el ejemplo de la consigna con fechas de 2099: 10:30–11:30 choca con R-0001; 11:00–12:00 es un turno consecutivo y se permite; MIC-02 se puede reservar en el mismo horario que MIC-01.
+
+**`disponibilidad UNIDAD --desde FECHA --hasta FECHA`:** indica si la unidad está libre y, si no lo está, lista las reservas que la bloquean. Devuelve 0 siempre que la consulta se complete (S-15).
+
+```
+$ .venv/bin/python -m reservas disponibilidad MIC-01 --desde "2099-11-03 10:30" --hasta "2099-11-03 11:30"
+La unidad MIC-01 está ocupada del 2099-11-03 10:30 al 2099-11-03 11:30. Reservas que la bloquean:
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0002  MIC-01  Beto Prueba  2099-11-03 11:00  2099-11-03 12:00  activa
+código: 0
+
+$ .venv/bin/python -m reservas disponibilidad MIC-01 --desde "2099-11-03 12:00" --hasta "2099-11-03 13:00"
+La unidad MIC-01 está libre del 2099-11-03 12:00 al 2099-11-03 13:00.
+código: 0
+
+$ .venv/bin/python -m reservas disponibilidad MIC-01 --desde "2020-01-01 10:00" --hasta "2020-01-01 11:00"
+El intervalo del 2020-01-01 10:00 al 2020-01-01 11:00 no es reservable: el inicio ya pasó.
+código: 0
+```
+
+**`cancelar ID`:** muestra la reserva, pide confirmación y la marca como cancelada sin borrarla.
+
+```
+$ echo n | .venv/bin/python -m reservas cancelar R-0003
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0003  MIC-02  Caro Prueba  2099-11-03 10:00  2099-11-03 11:00  activa
+¿Cancelar la reserva R-0003? (s/n): Operación cancelada. No se modificó la reserva.
+código: 1
+
+$ echo s | .venv/bin/python -m reservas cancelar R-0003
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0003  MIC-02  Caro Prueba  2099-11-03 10:00  2099-11-03 11:00  activa
+¿Cancelar la reserva R-0003? (s/n): Reserva R-0003 cancelada.
+código: 0
+
+$ .venv/bin/python -m reservas cancelar R-0003
+Error: La reserva R-0003 ya está cancelada (desde 2026-10-26 19:50:04).
+código: 1
+```
+
+`cancelada_en` registra la hora real de Buenos Aires del momento de la cancelación.
+
+**`listar [--unidad UNIDAD] [--estado activa|cancelada]`:** muestra las reservas ordenadas por inicio y luego por ID (por eso R-0003 aparece antes que R-0002). Si no hay reservas, muestra `No hay reservas.`
+
+```
+$ .venv/bin/python -m reservas listar
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0003  MIC-02  Caro Prueba  2099-11-03 10:00  2099-11-03 11:00  cancelada
+R-0002  MIC-01  Beto Prueba  2099-11-03 11:00  2099-11-03 12:00  activa
+código: 0
+
+$ .venv/bin/python -m reservas listar --unidad mic-01 --estado activa
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0002  MIC-01  Beto Prueba  2099-11-03 11:00  2099-11-03 12:00  activa
+código: 0
+
+$ .venv/bin/python -m reservas listar --estado pendiente
+uso: python -m reservas listar [-h] [--unidad UNIDAD]
+                               [--estado {activa,cancelada}]
+Error: argumento --estado: opción inválida: 'pendiente' (opciones válidas 'activa', 'cancelada')
+código: 1
+```
+
+**Códigos de salida:** 0 si la operación se completa; 1 si hay un error o no se confirma (S-10).
+
+### 2.8 Pruebas
+
+```bash
+.venv/bin/python -m pytest -v
+```
+
+Hay **165 pruebas automáticas**. Cada una usa una base temporal (`tmp_path`), nunca `datos/reservas.db`. Última corrida del agente sobre el código de la etapa 6: `165 passed in 1.85s`.
+
+| Archivo | Pruebas | Qué cubre |
+|---|---|---|
+| `tests/test_persistencia.py` | 10 | esquema e inventario (CA-01), base inexistente o sin tablas, `RESERVAS_DB`, cierre y reapertura (CA-10) |
+| `tests/test_crear_reserva.py` | 48 | creación válida (CA-02) y cada caso inválido de CA-06; dos con hora real y fechas de 2000 y 2099 |
+| `tests/test_superposicion.py` | 33 | ejemplo de la consigna (CA-03 a CA-05), superposiciones, disponibilidad igual a reservar (CA-09), `BEGIN IMMEDIATE` |
+| `tests/test_cancelar_reserva.py` | 21 | cancelación sin borrar (CA-07), errores (CA-08), reservas ya empezadas (CA-18), `UPDATE` sin `DELETE` |
+| `tests/test_cli.py` | 53 | los 6 comandos, confirmaciones (CA-11), códigos de salida (CA-12) y CA-13 a CA-17; 2 de punta a punta con `python -m reservas` en otro proceso |
+
+Las pruebas con `ahora` fijo usan fechas de 2030. Las que usan la hora real (camino `ahora=None` y punta a punta) usan 2099, para que sigan siendo futuras.
+
+### 2.9 Procedimiento manual de persistencia (CA-10)
 
 Comprueba que una reserva activa y una cancelada se conservan, con su estado, al cerrar la aplicación y la terminal y volver a ejecutarla (RF-07). Complementa el test automático `tests/test_persistencia.py::test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir`.
 
@@ -297,6 +553,26 @@ inventario.csv
 
 </details>
 
+### 2.10 Pendientes y limitaciones
+
+**Pendientes:** no quedan funcionalidades pendientes de la especificación (§1). El estado de cada etapa y las verificaciones están en [PROGRESO.md](PROGRESO.md).
+
+**Limitaciones de la aplicación:**
+
+- **Zona horaria única:** todas las fechas se interpretan en hora de Buenos Aires (S-01, D-06). No se pueden ingresar fechas de otra zona horaria.
+- **Depende del reloj del sistema:** el "ahora" se toma de la hora del sistema y no se puede fijar desde la CLI (D-08). Si el reloj está mal, las reglas de fechas pasadas se aplican con esa hora.
+- **Depende de la base de zonas horarias del sistema:** `zoneinfo` usa la del sistema operativo (en Linux, `/usr/share/zoneinfo`). Sin ella, la aplicación no puede calcular la hora de Buenos Aires. El paquete `tzdata` no está en `requirements.txt` y el caso no se probó.
+- **Sin modificar reservas** (fuera de alcance, §1.2): para cambiar una reserva hay que cancelarla y crear otra. Solo se pueden cancelar reservas que todavía no empezaron (S-19).
+- **Sin concurrencia distribuida:** está pensada para un solo usuario local. `BEGIN IMMEDIATE` evita superposiciones entre procesos de la misma computadora, pero no entre computadoras (S-12, D-13).
+- **Reiniciar borra todo y reutiliza IDs:** después de `inicializar`, `R-0001` puede referirse a una reserva distinta de la de antes del reinicio (D-16).
+- **Sin límites de duración ni anticipación:** una reserva puede bloquear una unidad por un período muy largo (D-09).
+- **Formato de fecha estricto:** `AAAA-MM-DD HH:MM` con ceros a la izquierda y sin espacios extra (D-23).
+- **Mensajes de argparse traducidos en parte:** los errores de argumentos más comunes están en español; otros mensajes internos de argparse pueden aparecer en inglés (D-30).
+- **Confirmaciones por pipe:** si la respuesta llega por la entrada estándar (`echo s | …`), no se ve escrita después de la pregunta y el mensaje siguiente queda en la misma línea.
+- **Dependencias no fijadas:** solo pytest tiene versión fija; sus dependencias toman la última versión compatible al instalar.
+
+**Limitaciones del proceso con el agente** (detalle en [PROGRESO.md › Entorno](PROGRESO.md#entorno-evidencia)): las reglas de permisos por prefijo de `.claude/settings.json` no cubren comandos armados con variables o funciones de shell, y no se pudo confirmar si dos ejecuciones del agente (la instalación de pytest en la etapa 1 y la prueba manual de la etapa 5) pidieron aprobación.
+
 ---
 
 ## 3. Preparación del agente
@@ -351,7 +627,7 @@ Instrucciones incluidas en `CLAUDE.md` para este problema:
 Evidencia de uso:
 
 - **Adaptación 1 (turnos consecutivos):** [prueba de mutación en PROGRESO.md](PROGRESO.md#prueba-de-mutación-turnos-consecutivos): con `<=`/`>=` en la consulta de superposición fallan 6 tests; sin el filtro de reservas activas falla 1. Tests de turnos consecutivos en [`tests/test_superposicion.py`](tests/test_superposicion.py): `test_consigna_permite_mic01_de_11_a_12`, `test_turno_consecutivo_anterior_se_permite` y `test_disponibilidad_coincide_con_crear_reserva` (casos consecutivos).
-- **Adaptación 2 (persistencia):** la cancelación ejecuta `UPDATE` y ningún `DELETE` dentro de `BEGIN IMMEDIATE` … `COMMIT` (test `test_cancelar_usa_update_y_nunca_delete` en [`tests/test_cancelar_reserva.py`](tests/test_cancelar_reserva.py)); el autor verificó con `grep -rn -i "delete" reservas/` que `DELETE` solo aparece en un docstring ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 4). Una reserva activa y una cancelada siguen con su estado tras cerrar y reabrir la base (test `test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir` en [`tests/test_persistencia.py`](tests/test_persistencia.py)) y tras reiniciar la terminal ([procedimiento manual de persistencia](#procedimiento-manual-de-persistencia-ca-10), ejecutado por el autor).
+- **Adaptación 2 (persistencia):** la cancelación ejecuta `UPDATE` y ningún `DELETE` dentro de `BEGIN IMMEDIATE` … `COMMIT` (test `test_cancelar_usa_update_y_nunca_delete` en [`tests/test_cancelar_reserva.py`](tests/test_cancelar_reserva.py)); el autor verificó con `grep -rn -i "delete" reservas/` que `DELETE` solo aparece en un docstring ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 4). Una reserva activa y una cancelada siguen con su estado tras cerrar y reabrir la base (test `test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir` en [`tests/test_persistencia.py`](tests/test_persistencia.py)) y tras reiniciar la terminal ([procedimiento manual de persistencia](#29-procedimiento-manual-de-persistencia-ca-10), ejecutado por el autor).
 - **Adaptación 3 (el "ahora" como parámetro):** el autor verificó con `grep -rn "environ" reservas/` que la única variable de entorno que se lee es `RESERVAS_DB` ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 2). Tests del camino `ahora=None` en [`tests/test_crear_reserva.py`](tests/test_crear_reserva.py): `test_ahora_none_acepta_una_reserva_en_2099` y `test_ahora_none_rechaza_una_reserva_en_2000`.
 
 ### 3.6 Retención del progreso
@@ -362,5 +638,29 @@ Evidencia de uso:
 
 ## 4. Registro de decisiones y delegación
 
-- **Decisiones técnicas:** [DECISIONES.md](DECISIONES.md).
-- **Episodios de delegación:** [PROGRESO.md › Episodios](PROGRESO.md#episodios-de-delegación). Pendiente: se registran durante la construcción.
+### 4.1 Decisiones más importantes
+
+El registro completo (D-01 a D-30), con contexto, alternativas y consecuencias, está en [DECISIONES.md](DECISIONES.md). D-01 a D-15 se tomaron en la planificación; D-16 en adelante surgieron durante la construcción, propuestas o planteadas por el agente y decididas por el autor.
+
+- **Intervalos semiabiertos con comparación estricta y una sola función de conflictos** (D-04, D-05): los turnos consecutivos no chocan y `disponibilidad` coincide siempre con `reservar`.
+- **El "ahora" como parámetro, no como variable de entorno** (D-08): se descartó la variable `RESERVAS_AHORA` porque permitía saltear la regla de fechas pasadas.
+- **Cancelar sin borrar** (D-10): `UPDATE` del estado y `cancelada_en`; nunca `DELETE`.
+- **Verificar e insertar en una misma transacción** (D-13): `BEGIN IMMEDIATE`.
+- **Reiniciar borra el archivo de la base** (D-16): los IDs vuelven a `R-0001`, sin `DELETE` ni `DROP` sobre `reservas`.
+- **No cancelar reservas ya empezadas** (D-26), y validar antes de pedir confirmación (D-29).
+- **Códigos de salida 0/1, también para errores de argumentos** (D-14, D-30); `disponibilidad` devuelve 0 cuando la consulta se completa (D-18).
+
+### 4.2 Episodios de delegación
+
+Hay cuatro episodios registrados.
+
+El detalle de cada episodio (contexto, instrucción, acción del agente, motivo) está en [PROGRESO.md › Episodios de delegación](PROGRESO.md#episodios-de-delegación).
+
+| Episodio | Objetivo | Decisión humana | Evidencia |
+|---|---|---|---|
+| [1 · Revisión de la especificación antes de programar](PROGRESO.md#episodio-1--revisión-de-la-especificación-antes-de-programar) | Confirmar que el agente interpretó la especificación antes de escribir código; el agente detectó 5 huecos | Aceptar el resumen y el plan, resolver los 5 huecos y rechazar la unión de las etapas 2 y 3 | Commit [`1191b03`](https://github.com/tbe02/reservas_laboratorio/commit/1191b03) |
+| [2 · Import fuera de lugar y conexión sin cerrar](PROGRESO.md#episodio-2--import-fuera-de-lugar-y-conexión-sin-cerrar-en-persistenciapy) | Capa de persistencia de la etapa 1; el agente corrigió su propio import y una conexión sin cerrar | Revisar en la pantalla de aprobación las ediciones de corrección y aceptarlas | Commit [`1a43df8`](https://github.com/tbe02/reservas_laboratorio/commit/1a43df8); test `tests/test_persistencia.py::test_abrir_archivo_que_no_es_sqlite_se_trata_como_no_inicializada` |
+| [3 · Pedido de registrar un rechazo humano que no ocurrió](PROGRESO.md#episodio-3--pedido-de-registrar-un-rechazo-humano-que-no-ocurrió) | Registro fiel de los episodios; el agente no escribió un rechazo que no había ocurrido | Aceptar la corrección del agente | Commit [`1a43df8`](https://github.com/tbe02/reservas_laboratorio/commit/1a43df8) (texto final del Episodio 2) |
+| [4 · Fechas de 2030 en tests de punta a punta con hora real](PROGRESO.md#episodio-4--fechas-de-2030-en-tests-de-punta-a-punta-con-hora-real) | Tests de la CLI de punta a punta (etapa 5); el agente usó fechas de 2030 con hora real, que fallarían desde noviembre de 2030 | Corregir: pasar los tests a 2099 y cambiar la regla de fechas de `CLAUDE.md` | Commit [`fb8f240`](https://github.com/tbe02/reservas_laboratorio/commit/fb8f240); tests `test_punta_a_punta_*` en `tests/test_cli.py`; regla de fechas en `CLAUDE.md` |
+
+Los incidentes del proceso (modo automático activo sin intención, pytest dentro de un pipe, huecos en las reglas de permisos) no son episodios de delegación. Están registrados en [PROGRESO.md › Entorno](PROGRESO.md#entorno-evidencia).
