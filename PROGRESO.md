@@ -42,7 +42,7 @@ Python 3.14.8
 | 1 | Estructura, base de datos e inventario | Hecho | `1a43df8` |
 | 2 | Crear reserva y validaciones | Hecho | `51ef8a1` |
 | 3 | Superposición y disponibilidad | Hecho | `4dc7f8d` |
-| 4 | Cancelación | Pendiente | |
+| 4 | Cancelación | Hecho | `0665a5d` |
 | 5 | CLI (comandos, confirmaciones, códigos de salida) | Pendiente | |
 | 6 | Persistencia (test y procedimiento manual) | Pendiente | |
 | 7 | Completar sección 2 del README | Pendiente | |
