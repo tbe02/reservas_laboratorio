@@ -16,7 +16,10 @@
       "Bash(python -m reservas:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(pip3 install:*)"
     ],
     "deny": [
       "Bash(git push:*)",
