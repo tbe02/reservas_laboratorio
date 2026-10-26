@@ -39,7 +39,7 @@ Python 3.14.8
 |---|---|---|---|
 | 0 | Especificación inicial y preparación del agente | Hecho | `6fd6135` |
 | 1 | Estructura, base de datos e inventario | Hecho | `1a43df8` |
-| 2 | Crear reserva y validaciones | Pendiente | |
+| 2 | Crear reserva y validaciones | Hecho | `51ef8a1` |
 | 3 | Superposición y disponibilidad | Pendiente | |
 | 4 | Cancelación | Pendiente | |
 | 5 | CLI (comandos, confirmaciones, códigos de salida) | Pendiente | |
@@ -87,7 +87,7 @@ Python 3.14.8
 - **Hecho:** `crear_reserva(conexion, unidad, solicitante, inicio, fin, ahora=None)` en la nueva capa de reglas, con las validaciones RN-01 a RN-05: unidad existente (sin distinguir mayúsculas), solicitante no vacío y recortado (S-06), formato `AAAA-MM-DD HH:MM` estricto y fecha existente, inicio anterior al fin, inicio posterior al "ahora". Si `ahora` es `None` se usa la hora real de Buenos Aires. Los errores se lanzan como `ErrorValidacion` con mensajes en español. `formatear_id_reserva` muestra los IDs como `R-0001`. En persistencia se agregaron `existe_unidad`, `insertar_reserva` y `obtener_reserva`.
 - **Archivos:** `reservas/reglas.py` (nuevo), `reservas/errores.py`, `reservas/persistencia.py`, `tests/test_crear_reserva.py` (nuevo).
 - **Pytest (informado por el agente):** `python -m pytest -v` → 57 passed in 0.17s (48 de `test_crear_reserva.py` y 9 de `test_persistencia.py`).
-- **Pytest (ejecutado por el autor):** `python -m pytest -v` → 57 passed in 0.17s.
+- **Pytest (ejecutado por el autor):** `python -m pytest -v` → 57 passed in 0.17s (Python 3.14.8, pytest 9.1.1).
 - **Revisión humana:** se revisó el informe de la etapa (validaciones, orden, manejo del ahora y tests); se aprobó D-22; se decidió mantener que las fechas no se recorten (D-23); se pidió agregar tests del camino `ahora=None` con años 2099 y 2000; se verificó con `grep` que el ahora no se lee de variables de entorno.
 - **Decisiones:** D-22 (interpretación del parámetro `ahora`), propuesta por el agente y aprobada por el autor. D-23 (las fechas no se recortan), señalada por el agente y decidida por el autor. Ambas agregadas a `DECISIONES.md`.
 - **Tests del camino `ahora=None`:** a pedido del autor se agregaron dos tests que usan la hora real (reserva en 2099 aceptada, en 2000 rechazada). Son una excepción aprobada a la regla de fecha fija de `CLAUDE.md` y lo aclara un comentario en el test.
@@ -104,7 +104,7 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 | 2026-10-26 | `python -m pytest -v` | Etapa 1 | 9 passed in 0.04s | Autor |
 | 2026-10-26 | `ls datos/` después de los tests | Etapa 1 | Solo `inventario.csv` | Autor |
 | 2026-10-26 | `python -m pytest -v` | Etapa 2 | 57 passed in 0.17s | Autor |
-| 2026-10-26 | `grep` recursivo sobre `reservas/` para buscar lecturas de variables de entorno | Etapa 2 | Única coincidencia en código fuente: `reservas/persistencia.py:45` (`os.environ.get("RESERVAS_DB")`). También coincidió el binario `reservas/__pycache__/persistencia.cpython-314.pyc`. El "ahora" no se lee de variables de entorno. | Autor |
+| 2026-10-26 | `grep -rn "environ" reservas/` | Etapa 2 | Única coincidencia en código fuente: `reservas/persistencia.py:45` (`os.environ.get("RESERVAS_DB")`). También coincidió el binario `reservas/__pycache__/persistencia.cpython-314.pyc`. El "ahora" no se lee de variables de entorno. | Autor |
 
 ---
 
