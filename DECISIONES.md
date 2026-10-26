@@ -120,3 +120,45 @@ Las decisiones nuevas que surjan durante la construcción se agregan al final co
 ## Decisiones durante la construcción
 
 <!-- Agregar aquí: D-16, D-17... con el commit o test que la respalda. -->
+
+Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hecha por el agente** en la etapa 0, antes de escribir código. El agente señaló los huecos y el autor tomó cada decisión. Se reflejan en los supuestos S-13 a S-17, en RF-02, RF-05 y RF-06 y en los criterios CA-13 a CA-16 del README.
+
+## D-16 · Reiniciar borra el archivo de la base; los IDs vuelven a `R-0001`
+
+- **Contexto:** RF-06 dice que reiniciar borra las reservas, pero S-07 dice que los IDs nunca se reutilizan, y `CLAUDE.md` prohíbe `DELETE` sobre `reservas`.
+- **Decisión:** `inicializar` borra el archivo de la base y lo crea de nuevo. Después de reiniciar, los IDs empiezan otra vez en `R-0001`. S-07 aplica dentro de una misma base (S-13).
+- **Alternativas:** `DROP TABLE` y recrear el esquema; conservar la secuencia de IDs entre reinicios.
+- **Consecuencias:** no se usa `DELETE` ni `DROP` sobre `reservas`. Un ID solo identifica una reserva dentro de una misma base: tras un reinicio, `R-0001` puede referirse a otra reserva.
+- **Evidencia:** pendiente (CA-13).
+
+## D-17 · `inicializar` sin reservas no pide confirmación
+
+- **Contexto:** RF-06 y S-08 solo piden confirmación si ya existen reservas; no se decía qué informar en los demás casos.
+- **Decisión:** si la base no existe, o existe pero no tiene reservas, `inicializar` la crea o la recrea sin preguntar e informa que se creó (S-14).
+- **Alternativas:** pedir confirmación siempre que el archivo exista; negarse a recrear una base ya inicializada.
+- **Consecuencias:** se pide confirmación solo cuando hay algo que perder.
+- **Evidencia:** pendiente (CA-13).
+
+## D-18 · `disponibilidad` devuelve 0 cuando la consulta se completa
+
+- **Contexto:** S-10 (0 si la operación se completa, 1 si hay error) no aclaraba si una unidad ocupada o un intervalo en el pasado cuenta como error.
+- **Decisión:** devuelve 0 con un resultado libre, ocupado o no reservable por estar en el pasado. Devuelve 1 solo con datos inválidos (unidad desconocida, fecha mal escrita, inicio igual o posterior al fin) o con la base no inicializada (S-15).
+- **Alternativas:** devolver 1 cuando la unidad está ocupada o el intervalo no es reservable.
+- **Consecuencias:** el código distingue "consulta mal hecha" de "respuesta negativa". Para saber si el intervalo está libre hay que leer el mensaje.
+- **Evidencia:** pendiente (CA-14).
+
+## D-19 · Orden, columnas y mensaje vacío de `listar`
+
+- **Contexto:** RF-05 no definía orden ni columnas.
+- **Decisión:** se ordena por inicio ascendente y, si empatan, por ID. Columnas: ID, unidad, solicitante, inicio, fin, estado. Sin reservas, muestra `No hay reservas.` y devuelve 0 (S-16).
+- **Alternativas:** ordenar por ID; incluir `creada_en` y `cancelada_en` en la salida.
+- **Consecuencias:** la salida se lee como una agenda cronológica y es estable para las pruebas.
+- **Evidencia:** pendiente (CA-15).
+
+## D-20 · Un archivo sin tablas cuenta como base no inicializada
+
+- **Contexto:** S-09 contemplaba solo el caso de que la base no existiera. Además, `sqlite3.connect` crea un archivo vacío si no existe.
+- **Decisión:** si el archivo existe pero no tiene las tablas, se trata como base no inicializada (S-17).
+- **Alternativas:** crear el esquema automáticamente al abrir; mostrar un error técnico de SQLite.
+- **Consecuencias:** el usuario recibe siempre el mismo mensaje ("ejecutá `inicializar`") y nunca una traza de SQLite.
+- **Evidencia:** pendiente (CA-16).

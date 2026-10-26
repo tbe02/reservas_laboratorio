@@ -58,11 +58,11 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | ID | Requisito |
 |---|---|
 | RF-01 | `unidades` muestra las 5 unidades del inventario. |
-| RF-02 | `disponibilidad UNIDAD --desde FECHA --hasta FECHA` indica si la unidad está libre en el intervalo y, si no lo está, lista las reservas activas que la bloquean. |
+| RF-02 | `disponibilidad UNIDAD --desde FECHA --hasta FECHA` indica si la unidad está libre en el intervalo y, si no lo está, lista las reservas activas que la bloquean. Libre, ocupada o no reservable son resultados informativos (ver S-15). |
 | RF-03 | `reservar UNIDAD --solicitante NOMBRE --inicio FECHA --fin FECHA` crea una reserva activa y devuelve su ID (`R-0001`, `R-0002`, …). |
 | RF-04 | `cancelar ID` muestra la reserva, pide confirmación (s/n) y la marca como cancelada sin borrarla. |
-| RF-05 | `listar [--unidad UNIDAD] [--estado activa\|cancelada]` muestra las reservas guardadas. |
-| RF-06 | `inicializar` crea la base y carga el inventario. Si ya existen reservas, informa cuántas hay, advierte que se borrarán y pide confirmación (s/n). |
+| RF-05 | `listar [--unidad UNIDAD] [--estado activa\|cancelada]` muestra las reservas guardadas con las columnas ID, unidad, solicitante, inicio, fin y estado, ordenadas por inicio y luego por ID (ver S-16). |
+| RF-06 | `inicializar` crea la base y carga el inventario. Si ya existen reservas, informa cuántas hay, advierte que se borrarán y pide confirmación (s/n). Si no hay reservas, crea o recrea la base sin preguntar e informa que se creó (ver S-13 y S-14). |
 | RF-07 | Las reservas y sus estados se conservan al cerrar y volver a ejecutar la aplicación. |
 
 ### 1.5 Reglas de negocio
@@ -100,6 +100,11 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | S-10 | **Códigos de salida:** 0 si la operación se completa; 1 si hay un error o el usuario no confirma. |
 | S-11 | **Solicitantes:** se usan nombres ficticios; no se guardan datos reales. |
 | S-12 | **Uso local de un solo usuario:** no se contempla concurrencia entre computadoras. La verificación y la inserción se hacen en una misma transacción. |
+| S-13 | **Reinicio de la base:** `inicializar` borra el archivo de la base y lo crea de nuevo; no usa `DELETE` ni `DROP` sobre `reservas`. Después de reiniciar, los IDs vuelven a empezar en `R-0001`. S-07 aplica dentro de una misma base: mientras no se reinicie, nunca se reutiliza un ID. |
+| S-14 | **Inicializar sin reservas:** si la base no existe, o existe pero no tiene reservas, `inicializar` la crea o la recrea sin pedir confirmación e informa que se creó. |
+| S-15 | **Códigos de salida de `disponibilidad`:** devuelve 0 siempre que la consulta se complete, esté la unidad libre, ocupada o el intervalo no sea reservable por estar en el pasado; el resultado es información, no un error. Devuelve 1 solo si hay datos inválidos (unidad desconocida, fecha mal escrita, inicio igual o posterior al fin) o la base no está inicializada. |
+| S-16 | **Salida de `listar`:** ordena por inicio ascendente y, si empatan, por ID. Columnas: ID, unidad, solicitante, inicio, fin, estado. Si no hay reservas, muestra `No hay reservas.` y devuelve 0. |
+| S-17 | **Base sin tablas:** si el archivo de la base existe pero no tiene las tablas, se trata como base no inicializada (S-09). |
 
 ### 1.7 Criterios de aceptación
 
@@ -119,6 +124,10 @@ Cada criterio se verifica con una prueba automática, salvo indicación.
 | CA-10 | Una reserva activa y una cancelada siguen existentes, con su estado, tras cerrar y volver a abrir la base. | Automática + procedimiento manual |
 | CA-11 | Responder `n` a una confirmación no modifica la base. | Automática |
 | CA-12 | Los comandos devuelven código 0 si salen bien y 1 si hay error. | Automática |
+| CA-13 | Si la base no existe o no tiene reservas, `inicializar` la crea sin pedir confirmación. Si tiene reservas y se confirma, la recrea sin reservas y la siguiente reserva recibe el ID `R-0001`. | Automática |
+| CA-14 | `disponibilidad` devuelve 0 con un intervalo libre, ocupado o en el pasado, y 1 con unidad desconocida, fecha mal escrita, inicio igual o posterior al fin o base no inicializada. | Automática |
+| CA-15 | `listar` muestra las reservas ordenadas por inicio y luego por ID, con las columnas de S-16. Sin reservas, muestra `No hay reservas.` y devuelve 0. | Automática |
+| CA-16 | Con un archivo de base existente pero sin tablas, los comandos distintos de `inicializar` muestran el error de base no inicializada y devuelven 1. | Automática |
 
 ### 1.8 Modelo de datos (SQLite)
 
