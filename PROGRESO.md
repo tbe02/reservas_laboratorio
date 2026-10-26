@@ -88,15 +88,15 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 
 Registrar solo episodios reales, en el momento en que ocurren. No inventar fallas ni pegar transcripciones completas.
 
-### Episodio 1 · Título
+### Episodio 1 · Revisión de la especificación antes de programar
 
-- **Objetivo y requisito:** (ej. RN-08 turnos consecutivos, CA-04)
-- **Contexto suministrado:** (archivos que leyó el agente)
-- **Extracto de la instrucción:** "…"
-- **Acción o resultado del agente:**
-- **Decisión humana:** aceptar / corregir / rechazar
-- **Motivo:**
-- **Evidencia:** commit `abc1234`, test `tests/...::test_...`, salida de pytest
+- **Objetivo y requisito:** confirmar que el agente interpretó la especificación (README §1) antes de escribir código.
+- **Contexto suministrado:** README.md, CLAUDE.md, PROGRESO.md y DECISIONES.md.
+- **Extracto de la instrucción:** "Resumime en pocas líneas qué tenemos que construir y las reglas de superposición. Después proponé un plan por etapas. No escribas código todavía."
+- **Acción o resultado del agente:** resumió correctamente los 6 comandos, la regla `inicio_A < fin_B and fin_A > inicio_B` con comparación estricta, que cancelar no borra y el "ahora" como parámetro. Propuso un plan de 7 etapas y detectó 5 huecos: reinicio vs. IDs no reutilizables y prohibición de DELETE, `inicializar` sin reservas, código de salida de `disponibilidad` cuando está ocupada, orden y columnas de `listar`, y archivo de base sin tablas. Ofreció unir las etapas 2 y 3.
+- **Decisión humana:** aceptar el resumen y el plan; resolver los 5 huecos; rechazar la unión de etapas 2 y 3.
+- **Motivo:** los huecos eran ambigüedades reales que habrían obligado al agente a suponer. Se mantuvieron las etapas separadas para revisar las validaciones y la regla de superposición por separado.
+- **Evidencia:** commit `COMPLETAR` (README §1 y DECISIONES.md D-16 en adelante).
 
 ### Episodio 2 · Título
 
