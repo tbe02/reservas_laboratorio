@@ -162,3 +162,11 @@ Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hec
 - **Alternativas:** crear el esquema automáticamente al abrir; mostrar un error técnico de SQLite.
 - **Consecuencias:** el usuario recibe siempre el mismo mensaje ("ejecutá `inicializar`") y nunca una traza de SQLite.
 - **Evidencia:** pendiente (CA-16).
+
+## D-21 · Las rutas por defecto se calculan desde la raíz del proyecto
+
+- **Contexto:** la especificación indica `datos/reservas.db` y `datos/inventario.csv`, pero no aclara desde qué carpeta se calculan. Surgió en la etapa 1; la propuso el agente y la aprobó el autor.
+- **Decisión:** las dos rutas se calculan desde la carpeta que contiene el paquete `reservas/`, no desde la carpeta donde se ejecuta el comando. Si `RESERVAS_DB` es una ruta relativa, se toma desde la carpeta actual, como cualquier variable de entorno.
+- **Alternativas:** calcular ambas rutas desde la carpeta actual.
+- **Consecuencias:** ejecutar desde otra carpeta no crea una base suelta en otro lugar y el inventario se encuentra igual.
+- **Evidencia:** `reservas/persistencia.py` (`RAIZ_PROYECTO`), test `tests/test_persistencia.py::test_ruta_base_por_defecto_es_datos_reservas_db`.
