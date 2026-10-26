@@ -191,7 +191,7 @@ Contenido previsto:
 |---|---|---|
 | Agente / harness | Claude Code (CLI en terminal, Linux) | — |
 | Versión | 2.1.309 | Salida de `claude --version` |
-| Modelo | Claude Opus 5.5, esfuerzo alto | Pendiente: copiar el identificador exacto que muestra `/status` en [PROGRESO.md](PROGRESO.md) |
+| Modelo | Claude Opus 5.5 (`claude-opus-5-5`), esfuerzo alto | Salida de `/status` en [PROGRESO.md](PROGRESO.md#entorno-evidencia) |
 | Plan | Claude Pro | — |
 
 **Función:** el agente lee el repositorio, propone e implementa código y pruebas por etapas, y ejecuta pytest. Las ediciones y los commits requieren aprobación humana.

@@ -6,30 +6,36 @@ Archivo versionado de progreso, verificaciones y episodios de delegación. El ag
 
 ## Entorno (evidencia)
 
-Completar con la salida real copiada de la terminal, sin editarla.
-
 ```
-$ claude --version
-2.1.309 (Claude Code)
-```
-
-```
-# Salida de /status dentro de Claude Code (pegar aquí; quitar datos de la cuenta si aparecen)
-PENDIENTE
+# Salida de /status dentro de Claude Code (2026-10-26).
+# Se quitaron: Session ID, Peer address, Organization y Email.
+Version:           2.1.309
+Session kind:      interactive
+cwd:               /home/theo/Documents/reservas_laboratorio
+Login method:      Claude Pro account
+Model:             opus (claude-opus-5-5)
+MCP servers:       1 connected
+Setting sources:   User settings, Shared project settings
+Auto mode server:  Enabled
 ```
 
 ```
 $ python --version
-PENDIENTE
+Python 3.14.8
 ```
 
+- **Modelo:** Claude Opus 5.5 (`claude-opus-5-5`). Esfuerzo alto: no aparece en `/status`, pero la interfaz de Claude Code muestra el indicador `high · /effort`.
+- **Configuración del proyecto:** "Shared project settings" confirma que se aplica `.claude/settings.json` del repositorio.
+- **Modo de permisos:** se trabaja en el modo normal (pide aprobación antes de editar). El modo automático está disponible pero **no se usa**.
+- **MCP:** 1 servidor conectado, `claude.ai Claude Docs` (8 herramientas), que proviene de la cuenta de claude.ai y no de la configuración del repositorio. No se usa en este proyecto: no se le pide al agente que lo utilice y todo el trabajo queda en archivos versionados del repositorio.
+- **Entorno de Python:** entorno virtual `.venv` creado con `python3 -m venv .venv` y activado antes de abrir Claude Code.
 ---
 
 ## Etapas
 
 | # | Etapa | Estado | Commit |
 |---|---|---|---|
-| 0 | Especificación inicial y preparación del agente | Hecho (pendiente de commit) | |
+| 0 | Especificación inicial y preparación del agente | Hecho | `6fd6135` |
 | 1 | Estructura, base de datos e inventario | Pendiente | |
 | 2 | Crear reserva y validaciones | Pendiente | |
 | 3 | Superposición y disponibilidad | Pendiente | |
