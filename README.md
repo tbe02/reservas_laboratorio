@@ -239,7 +239,10 @@ Instrucciones incluidas en `CLAUDE.md` para este problema:
 2. **Procedimiento de persistencia:** prohibido borrar reservas (`DELETE`); cancelar cambia el estado; test de cierre y reapertura de la base.
 3. **El "ahora" como parámetro:** prohibido leer la hora desde variables de entorno.
 
-Evidencia de uso: pendiente, se enlazará en [PROGRESO.md](PROGRESO.md) a los commits y tests correspondientes.
+Evidencia de uso:
+
+- **Adaptación 1 (turnos consecutivos):** [prueba de mutación en PROGRESO.md](PROGRESO.md#prueba-de-mutación-turnos-consecutivos): con `<=`/`>=` en la consulta de superposición fallan 6 tests; sin el filtro de reservas activas falla 1. Tests de turnos consecutivos en [`tests/test_superposicion.py`](tests/test_superposicion.py): `test_consigna_permite_mic01_de_11_a_12`, `test_turno_consecutivo_anterior_se_permite` y `test_disponibilidad_coincide_con_crear_reserva` (casos consecutivos).
+- **Adaptaciones 2 y 3:** pendiente, se enlazará en [PROGRESO.md](PROGRESO.md) a los commits y tests correspondientes.
 
 ### 3.6 Retención del progreso
 

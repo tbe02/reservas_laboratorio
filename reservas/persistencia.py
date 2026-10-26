@@ -7,6 +7,7 @@ reiniciar la base borra el archivo completo (S-13).
 import csv
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 from reservas.errores import ErrorBaseNoInicializada
@@ -137,6 +138,40 @@ def insertar_reserva(conexion, unidad_id, solicitante, inicio, fin, creada_en):
         (unidad_id, solicitante, inicio, fin, creada_en),
     )
     return cursor.lastrowid
+
+
+@contextmanager
+def transaccion_inmediata(conexion):
+    """Transacción con BEGIN IMMEDIATE: confirma al salir, revierte si hay error.
+
+    Toma el bloqueo de escritura al empezar, así nadie puede insertar entre
+    la verificación de superposición y la inserción (D-13).
+    """
+    conexion.execute("BEGIN IMMEDIATE")
+    try:
+        yield
+    except BaseException:
+        conexion.execute("ROLLBACK")
+        raise
+    conexion.execute("COMMIT")
+
+
+def buscar_conflictos(conexion, unidad_id, inicio, fin):
+    """Reservas activas de la unidad que se superponen con [inicio, fin).
+
+    Es la única consulta de superposición; la usan tanto la creación como la
+    disponibilidad (RN-10). Comparaciones estrictas: los turnos consecutivos
+    no chocan (RN-08) y las canceladas no bloquean (RN-06).
+    """
+    return conexion.execute(
+        "SELECT * FROM reservas "
+        "WHERE unidad_id = :unidad "
+        "AND estado = 'activa' "
+        "AND inicio < :fin_nuevo "
+        "AND fin > :inicio_nuevo "
+        "ORDER BY inicio, id",
+        {"unidad": unidad_id, "inicio_nuevo": inicio, "fin_nuevo": fin},
+    ).fetchall()
 
 
 def obtener_reserva(conexion, reserva_id):

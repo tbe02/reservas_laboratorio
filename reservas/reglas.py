@@ -1,4 +1,4 @@
-"""Reglas de negocio: validaciones y creación de reservas.
+"""Reglas de negocio: validaciones, disponibilidad y creación de reservas.
 
 Las fechas se manejan como `datetime` sin zona, interpretadas siempre en
 hora de Buenos Aires (S-01). En la base se guardan como texto con formato
@@ -6,11 +6,12 @@ fijo, que se ordena y compara igual que las fechas (D-06).
 """
 
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from reservas import persistencia
-from reservas.errores import ErrorValidacion
+from reservas.errores import ErrorSuperposicion, ErrorValidacion
 
 ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
 FORMATO_FECHA = "%Y-%m-%d %H:%M"
@@ -75,25 +76,88 @@ def _validar_unidad_e_intervalo(conexion, unidad, inicio, fin):
     return unidad_id, inicio_dt, fin_dt
 
 
-def crear_reserva(conexion, unidad, solicitante, inicio, fin, ahora=None):
-    """Crea una reserva activa y devuelve su ID numérico.
+@dataclass(frozen=True)
+class Disponibilidad:
+    """Resultado de evaluar un intervalo de una unidad."""
 
-    Lanza ErrorValidacion si no se cumple alguna regla (RN-01 a RN-05).
+    unidad_id: str
+    inicio: datetime
+    fin: datetime
+    en_pasado: bool
+    conflictos: list
+
+    @property
+    def libre(self):
+        return not self.conflictos
+
+    @property
+    def reservable(self):
+        return self.libre and not self.en_pasado
+
+
+def consultar_disponibilidad(conexion, unidad, inicio, fin, ahora=None):
+    """Evalúa si el intervalo [inicio, fin) de la unidad se puede reservar.
+
+    Es la función compartida con crear_reserva (RN-10): aplica RN-01 y RN-03
+    a RN-07. Lanza ErrorValidacion si los datos son inválidos; si el intervalo
+    está ocupado o en el pasado, lo informa en el resultado (S-03, S-15).
     """
     ahora = _normalizar_ahora(ahora)
     unidad_id, inicio_dt, fin_dt = _validar_unidad_e_intervalo(
         conexion, unidad, inicio, fin
     )
-    solicitante = validar_solicitante(solicitante)
-    if inicio_dt <= ahora:
-        raise ErrorValidacion(
-            "No se puede reservar: el inicio debe ser posterior al momento actual."
-        )
-    return persistencia.insertar_reserva(
+    conflictos = persistencia.buscar_conflictos(
         conexion,
         unidad_id,
-        solicitante,
         inicio_dt.strftime(FORMATO_FECHA),
         fin_dt.strftime(FORMATO_FECHA),
-        ahora.strftime(FORMATO_REGISTRO),
     )
+    return Disponibilidad(
+        unidad_id=unidad_id,
+        inicio=inicio_dt,
+        fin=fin_dt,
+        en_pasado=inicio_dt <= ahora,
+        conflictos=conflictos,
+    )
+
+
+def _mensaje_superposicion(unidad_id, conflictos):
+    detalle = ", ".join(
+        f"{formatear_id_reserva(c['id'])} ({c['inicio']} a {c['fin']})"
+        for c in conflictos
+    )
+    return f"La unidad {unidad_id} ya está reservada en ese horario: {detalle}."
+
+
+def crear_reserva(conexion, unidad, solicitante, inicio, fin, ahora=None):
+    """Crea una reserva activa y devuelve su ID numérico.
+
+    Lanza ErrorValidacion si no se cumple alguna regla (RN-01 a RN-05) y
+    ErrorSuperposicion si choca con otra reserva activa (RN-07). La
+    verificación y la inserción ocurren en la misma transacción (D-13).
+    """
+    ahora = _normalizar_ahora(ahora)
+    with persistencia.transaccion_inmediata(conexion):
+        disponibilidad = consultar_disponibilidad(
+            conexion, unidad, inicio, fin, ahora=ahora
+        )
+        solicitante = validar_solicitante(solicitante)
+        if disponibilidad.en_pasado:
+            raise ErrorValidacion(
+                "No se puede reservar: el inicio debe ser posterior al momento actual."
+            )
+        if not disponibilidad.libre:
+            raise ErrorSuperposicion(
+                _mensaje_superposicion(
+                    disponibilidad.unidad_id, disponibilidad.conflictos
+                ),
+                disponibilidad.conflictos,
+            )
+        return persistencia.insertar_reserva(
+            conexion,
+            disponibilidad.unidad_id,
+            solicitante,
+            disponibilidad.inicio.strftime(FORMATO_FECHA),
+            disponibilidad.fin.strftime(FORMATO_FECHA),
+            ahora.strftime(FORMATO_REGISTRO),
+        )

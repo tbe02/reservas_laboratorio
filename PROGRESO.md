@@ -53,7 +53,7 @@ Python 3.14.8
 | 0 | "Leé README.md, CLAUDE.md y PROGRESO.md. Resumime qué tenemos que construir y las reglas de superposición. Proponé un plan por etapas. No escribas código todavía." |
 | 1 | "Etapa 1: creá la estructura del paquete `reservas/` y la capa de persistencia en SQLite según el esquema de la sección 1 del README. Incluí la carga del inventario de las 5 unidades y requirements.txt con pytest en versión fija. Escribí tests de que el inventario se carga correctamente." |
 | 2 | "Etapa 2: implementá crear_reserva con todas las validaciones de la sección 1 (unidad existente, solicitante no vacío, fechas válidas, inicio < fin, no en el pasado). El "ahora" se recibe como parámetro opcional, como dice CLAUDE.md. Tests para cada caso inválido y para una creación válida." |
-| 3 | |
+| 3 | "Etapa 3: implementá la detección de superposición y la consulta de disponibilidad usando UNA sola función compartida. Tests obligatorios: el ejemplo de la consigna (MIC-01 10-11 rechaza 10:30-11:30 y permite 11-12), MIC-02 10-11 permitido con MIC-01 ocupado, y que disponibilidad dé el mismo resultado que crear_reserva." |
 | 4 | |
 | 5 | |
 | 6 | |
@@ -93,6 +93,17 @@ Python 3.14.8
 - **Tests del camino `ahora=None`:** a pedido del autor se agregaron dos tests que usan la hora real (reserva en 2099 aceptada, en 2000 rechazada). Son una excepción aprobada a la regla de fecha fija de `CLAUDE.md` y lo aclara un comentario en el test.
 - **Pendientes:** `crear_reserva` todavía **no** detecta superposiciones ni usa `BEGIN IMMEDIATE` (etapa 3).
 
+### Etapa 3 · 2026-10-26
+- **Hecho:** detección de superposición con una única consulta, `persistencia.buscar_conflictos` (la de §1.8, con `<` y `>` estrictos y filtro `estado = 'activa'`). `reglas.consultar_disponibilidad` es la función compartida (RN-10): valida RN-01, RN-03 y RN-04, busca conflictos y devuelve un resultado con `libre`, `en_pasado`, `reservable` y la lista de reservas que bloquean. `crear_reserva` llama a `consultar_disponibilidad` dentro de `persistencia.transaccion_inmediata` (`BEGIN IMMEDIATE`; `ROLLBACK` si hay error, D-13) y lanza `ErrorSuperposicion` (nuevo), con un mensaje que indica las reservas que bloquean.
+- **Archivos:** `reservas/persistencia.py`, `reservas/reglas.py`, `reservas/errores.py`, `tests/test_superposicion.py` (nuevo).
+- **Pytest (informado por el agente):** `python -m pytest -v` → 90 passed in 0.35s (33 de `test_superposicion.py`, 48 de `test_crear_reserva.py` y 9 de `test_persistencia.py`).
+- **Tests obligatorios:** `test_consigna_rechaza_mic01_de_10_30_a_11_30` (CA-03), `test_consigna_permite_mic01_de_11_a_12` (CA-04), `test_consigna_permite_mic02_de_10_a_11_con_mic01_ocupado` (CA-05) y `test_disponibilidad_coincide_con_crear_reserva` con 8 casos (CA-09).
+- **Prueba de mutación (agente, sobre una copia en el scratchpad; el repositorio no se modificó):** con `<=`/`>=` en la consulta fallan 6 tests (los de turnos consecutivos); sin el filtro `estado = 'activa'` falla `test_reserva_cancelada_no_bloquea`. Detalle, comandos y bloqueo de la regla deny en [Prueba de mutación: turnos consecutivos](#prueba-de-mutación-turnos-consecutivos).
+- **Pytest (ejecutado por el autor):** `python -m pytest -v` → 90 passed in 0.27s (Python 3.14.8, pytest 9.1.1).
+- **Revisión humana:** se revisó el informe, la consulta de superposición y la prueba de mutación; se verificó con `grep` que la consulta usa comparaciones estrictas y con `git status` que no quedaron restos de la mutación.
+- **Decisiones:** D-24 (un intervalo en el pasado y ocupado muestra ambas cosas en `disponibilidad`), planteada por el agente como pregunta y decidida por el autor; se aplica en la etapa 5.
+- **Pendientes:** el test de que una reserva cancelada no bloquea simula la cancelación con un `UPDATE` directo; la cancelación real llega en la etapa 4 (CA-07). Aplicar D-24 en la CLI (etapa 5).
+
 ---
 
 ## Verificaciones ejecutadas
@@ -105,6 +116,59 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 | 2026-10-26 | `ls datos/` después de los tests | Etapa 1 | Solo `inventario.csv` | Autor |
 | 2026-10-26 | `python -m pytest -v` | Etapa 2 | 57 passed in 0.17s | Autor |
 | 2026-10-26 | `grep -rn "environ" reservas/` | Etapa 2 | Única coincidencia en código fuente: `reservas/persistencia.py:45` (`os.environ.get("RESERVAS_DB")`). También coincidió el binario `reservas/__pycache__/persistencia.cpython-314.pyc`. El "ahora" no se lee de variables de entorno. | Autor |
+| 2026-10-26 | `python -m pytest -v` | Etapa 3 | 90 passed in 0.27s (Python 3.14.8, pytest 9.1.1) | Autor |
+| 2026-10-26 | `git status` después de la prueba de mutación | Etapa 3 | Solo cambios de la etapa 3 (`PROGRESO.md`, `errores.py`, `persistencia.py`, `reglas.py` y `tests/test_superposicion.py` nuevo); no quedaron restos de la mutación | Autor |
+| 2026-10-26 | `grep -n "inicio <\|fin >" reservas/persistencia.py` | Etapa 3 | Líneas 170-171: `AND inicio < :fin_nuevo` y `AND fin > :inicio_nuevo` (estrictas); línea 35: `CHECK (inicio < fin)` | Autor |
+
+---
+
+## Prueba de mutación: turnos consecutivos
+
+Evidencia de la adaptación específica 1 del README (§3.5). La ejecutó el agente en la etapa 3 sobre copias de `reservas/`, `tests/` y `datos/inventario.csv` en su carpeta temporal de sesión (scratchpad), fuera del repositorio. El autor verificó después con `git status` que el repositorio no quedó modificado.
+
+**Objetivo:** comprobar que los tests detectan si la consulta de superposición deja de usar comparaciones estrictas o deja de ignorar las reservas canceladas.
+
+| Mutación | Qué se cambió en `buscar_conflictos` | Resultado |
+|---|---|---|
+| Comparaciones no estrictas | `inicio < :fin_nuevo` → `inicio <= :fin_nuevo` y `fin > :inicio_nuevo` → `fin >= :inicio_nuevo` | 6 failed, 84 passed |
+| Sin filtro de estado | se quitó la línea `AND estado = 'activa'` | 1 failed, 89 passed |
+
+Tests que fallaron con comparaciones no estrictas:
+
+```
+FAILED tests/test_superposicion.py::test_consigna_permite_mic01_de_11_a_12 - ...
+FAILED tests/test_superposicion.py::test_turno_consecutivo_anterior_se_permite
+FAILED tests/test_superposicion.py::test_disponibilidad_libre - AssertionErro...
+FAILED tests/test_superposicion.py::test_disponibilidad_lista_todas_las_reservas_que_bloquean
+FAILED tests/test_superposicion.py::test_disponibilidad_coincide_con_crear_reserva[MIC-01-2030-11-03 11:00-2030-11-03 12:00-True]
+FAILED tests/test_superposicion.py::test_disponibilidad_coincide_con_crear_reserva[MIC-01-2030-11-03 09:00-2030-11-03 10:00-True]
+6 failed, 84 passed in 0.34s
+```
+
+Test que falló sin el filtro de estado:
+
+```
+FAILED tests/test_superposicion.py::test_reserva_cancelada_no_bloquea - Asser...
+1 failed, 89 passed in 0.29s
+```
+
+Comandos usados (`SCRATCHPAD` = `/tmp/claude-1000/-home-theo-Documents-reservas-laboratorio/fa0163b8-a12f-474a-9022-7c77024ce616/scratchpad`):
+
+```bash
+# Mutación 1: comparaciones no estrictas
+S=$SCRATCHPAD/mutacion-estricta && mkdir -p "$S/datos" && cd /home/theo/Documents/reservas_laboratorio && cp -r reservas tests "$S/" && cp datos/inventario.csv "$S/datos/" && cd "$S" && sed -i 's/"AND inicio < :fin_nuevo "/"AND inicio <= :fin_nuevo "/; s/"AND fin > :inicio_nuevo "/"AND fin >= :inicio_nuevo "/' reservas/persistencia.py && grep -n "inicio <=\|fin >=" reservas/persistencia.py && python -m pytest -q -p no:cacheprovider 2>&1 | grep -E "FAILED|passed|failed"
+
+# Mutación 2: sin filtro de estado
+S=$SCRATCHPAD/mutacion-estado && mkdir -p "$S/datos" && cd /home/theo/Documents/reservas_laboratorio && cp -r reservas tests "$S/" && cp datos/inventario.csv "$S/datos/" && cd "$S" && sed -i "/\"AND estado = 'activa' \"/d" reservas/persistencia.py && sed -n '165,172p' reservas/persistencia.py && python -m pytest -q -p no:cacheprovider 2>&1 | grep -E "FAILED|passed|failed"
+```
+
+(En los comandos ejecutados, `$SCRATCHPAD` estaba escrito como la ruta completa.)
+
+**Bloqueo de la regla deny.** El primer intento de la mutación 1 fue rechazado por la regla `Bash(rm -rf:*)` de `.claude/settings.json`, porque incluía dos `rm -rf` (para limpiar la carpeta temporal y los `__pycache__` copiados). Los dos apuntaban a la carpeta temporal, no al repositorio. El agente no insistió con el mismo comando: lo reescribió sin `rm -rf` usando carpetas nuevas. Comando bloqueado, exacto:
+
+```bash
+S=/tmp/claude-1000/-home-theo-Documents-reservas-laboratorio/fa0163b8-a12f-474a-9022-7c77024ce616/scratchpad/mutacion && rm -rf "$S" && mkdir -p "$S/datos" && cd /home/theo/Documents/reservas_laboratorio && cp -r reservas tests "$S/" && cp datos/inventario.csv "$S/datos/" && rm -rf "$S"/reservas/__pycache__ "$S"/tests/__pycache__ && cd "$S" && sed -i 's/"AND inicio < :fin_nuevo "/"AND inicio <= :fin_nuevo "/; s/"AND fin > :inicio_nuevo "/"AND fin >= :inicio_nuevo "/' reservas/persistencia.py && grep -n "inicio <=\|fin >=" reservas/persistencia.py && python -m pytest -q -p no:cacheprovider 2>&1 | grep -E "FAILED|passed|failed"
+```
 
 ---
 

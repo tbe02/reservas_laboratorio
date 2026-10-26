@@ -186,3 +186,11 @@ Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hec
 - **Alternativas:** recortar las fechas igual que el solicitante.
 - **Consecuencias:** el formato es estricto y coincide con RN-03 y S-02. El usuario tiene que escribir la fecha exacta.
 - **Evidencia:** test `tests/test_crear_reserva.py::test_formato_de_fecha_invalido` (caso `" 2030-11-03 10:00"`).
+
+## D-24 · Disponibilidad en el pasado y ocupada muestra ambas cosas
+
+- **Contexto:** S-03 indica informar que un intervalo en el pasado no es reservable, pero no dice si además se listan las reservas que lo bloquean cuando también está ocupado. Surgió en la etapa 3; el agente lo planteó como pregunta y el autor decidió.
+- **Decisión:** en `disponibilidad`, un intervalo que está en el pasado y ocupado muestra las dos cosas: que no es reservable por estar en el pasado y las reservas activas que lo bloquean. Se aplica en la CLI (etapa 5).
+- **Alternativas:** mostrar solo "no reservable" y omitir las reservas que bloquean.
+- **Consecuencias:** el usuario ve toda la información del intervalo. `consultar_disponibilidad` ya devuelve `en_pasado` y `conflictos` por separado, así que no hace falta cambiar la capa de reglas.
+- **Evidencia:** pendiente (etapa 5).
