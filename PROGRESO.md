@@ -58,7 +58,7 @@ Python 3.14.8
 | 3 | "Etapa 3: implementá la detección de superposición y la consulta de disponibilidad usando UNA sola función compartida. Tests obligatorios: el ejemplo de la consigna (MIC-01 10-11 rechaza 10:30-11:30 y permite 11-12), MIC-02 10-11 permitido con MIC-01 ocupado, y que disponibilidad dé el mismo resultado que crear_reserva." |
 | 4 | "Etapa 4: implementá cancelar_reserva. No borra el registro: cambia el estado y guarda cancelada_en. Error claro si no existe o ya está cancelada. Tests: el registro se conserva, el horario se libera (se puede volver a reservar) y la doble cancelación da error." |
 | 5 | "Etapa 5: implementá la CLI con los comandos inicializar, unidades, disponibilidad, reservar, cancelar y listar, según la sección 1. inicializar y cancelar piden confirmación (s/n). Mensajes en español y código de salida 0 o 1. Agregá un par de tests de punta a punta de la CLI." |
-| 6 | |
+| 6 | "Etapa 6: agregá un test de persistencia: crear una reserva activa y una cancelada, cerrar la conexión, reabrir la misma base y verificar que ambas siguen con su estado. Después escribí en el README el procedimiento manual de reinicio con los resultados esperados, usando fechas de 2099 y RESERVAS_DB en /tmp para no tocar la base real. Dejá la columna de resultados observados vacía: la completo yo cuando lo ejecute." |
 | 7 | |
 
 ---
@@ -136,6 +136,18 @@ Python 3.14.8
 - **`CLAUDE.md` (antes del commit, a pedido del autor):** las fechas de 2030 quedan solo para tests con `ahora` fijo; los tests con hora real y los ejemplos manuales del README usan 2099. La app y pytest se invocan siempre con el comando literal (`.venv/bin/python -m …`), nunca mediante variables ni funciones de shell, para que se apliquen las reglas de permisos.
 - **Pendientes:** etapa 6 (test de cierre y reapertura y procedimiento manual de persistencia). En el procedimiento manual del README (etapas 6 y 7), `RESERVAS_DB` se define con `export RESERVAS_DB=/tmp/...` en una línea aparte y después van los comandos literales (`.venv/bin/python -m reservas …`), como en la prueba manual del autor.
 
+### Etapa 6 · 2026-10-26
+- **Hecho:** test `tests/test_persistencia.py::test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir` (CA-10, RF-07): crea R-0001 activa y R-0002 cancelada con `ahora` fijo, cierra la conexión, reabre la misma base y verifica los datos y el estado de ambas (incluido `cancelada_en`). Comprueba además que, tras reabrir, la activa sigue bloqueando, la cancelada no, y la siguiente reserva recibe R-0003 (S-07). En README §2 se agregó el "Procedimiento manual de persistencia (CA-10)": dos sesiones separadas por el cierre de la terminal, `export RESERVAS_DB=/tmp/reservas_persistencia.db` en una línea aparte, comandos literales `.venv/bin/python -m reservas …`, fechas de 2099, tabla de 13 pasos con resultado esperado y columna "Resultado observado" vacía para el autor.
+- **Archivos:** `tests/test_persistencia.py`, `README.md`.
+- **Pytest (informado por el agente):** `.venv/bin/python -m pytest -v` → 165 passed in 1.85s.
+- **Ejecución del procedimiento por el agente:** para que los resultados esperados del README sean salidas reales, el agente ejecutó los mismos comandos con `RESERVAS_DB=/tmp/reservas_persistencia_agente.db` (otra ruta, para no dejar creada la base del procedimiento), en dos llamadas de shell separadas (la segunda empezó con `RESERVAS_DB` vacía). En el paso 5 la respuesta `s` se pasó con `echo s | …`. Todos los pasos dieron lo esperado y `datos/` siguió conteniendo solo `inventario.csv`. La salida completa quedó en el README (sección desplegable). Antes se comprobó que ni esa ruta ni `/tmp/reservas_persistencia.db` existían.
+- **Pytest (ejecutado por el autor):** `.venv/bin/python -m pytest -v` → 165 passed in 1.76s.
+- **Procedimiento manual (ejecutado por el autor):** dos sesiones de terminal con `export RESERVAS_DB=/tmp/reservas_persistencia.db` y los comandos literales del README, con un reinicio de la terminal entre ellas. Los 13 pasos coincidieron con lo esperado: R-0001 `activa` y R-0002 `cancelada` antes y después del reinicio; tras reiniciar, MIC-01 ocupada por R-0001, MIC-02 libre y la nueva reserva recibió R-0003; `datos/` solo con `inventario.csv`. El paso 1 (`ls` de la base en `/tmp`) dio código 2 porque el archivo no existía, como se esperaba. Resultados volcados en la columna "Resultado observado" del README.
+- **Revisión humana:** se revisó el test de persistencia y el procedimiento; el autor ejecutó el procedimiento manual en dos terminales (cerrando la primera antes de abrir la segunda) y se detectó que los bloques de comandos no mostraban los códigos de salida.
+- **Cambios tras la revisión:** en los bloques de comandos del procedimiento se agregó `; echo "código: $?"` después de cada comando, como los ejecutó el autor (el texto decía que se mostraba el código, pero los bloques no lo incluían). En README §3.5 se enlazó la evidencia de la adaptación 2 (persistencia): `test_cancelar_usa_update_y_nunca_delete`, el `grep` de `DELETE` del autor (etapa 4), el test de persistencia nuevo y el procedimiento manual.
+- **Decisión del autor:** no se suman al procedimiento los pasos de reinicio de datos con `inicializar`: ya los cubren los tests de CA-13, y la advertencia de que borra las reservas va en la sección 2 del README (etapa 7).
+- **Pendientes:** etapa 7 (resto de la sección 2 del README, incluida la advertencia de que `inicializar` borra las reservas).
+
 ---
 
 ## Verificaciones ejecutadas
@@ -157,6 +169,8 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 | 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 5 (antes de pasar los tests de punta a punta a 2099 y de editar `CLAUDE.md`) | 164 passed in 1.71s | Autor |
 | 2026-10-26 | `.venv/bin/python -m pytest -v` | `fb8f240` (etapa 5) | 164 passed in 1.72s | Autor |
 | 2026-10-26 | Prueba manual de la CLI con `RESERVAS_DB=/tmp/prueba_theo.db` y `.venv/bin/python -m reservas`: `inicializar`, `unidades`, `reservar` (R-0001 MIC-01 10–11), `reservar` 10:30–11:30, `reservar` (R-0002 11–12), `disponibilidad` 10–12, `cancelar R-0001` con `s`, `listar` | Etapa 5 | Base creada; 5 unidades; R-0001 creada; choque con R-0001; R-0002 creada; disponibilidad listó R-0001 y R-0002; cancelar mostró la reserva y la canceló; `listar`: R-0001 cancelada y R-0002 activa | Autor |
+| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 6 (sin commit) | 165 passed in 1.76s | Autor |
+| 2026-10-26 | Procedimiento manual de persistencia del README (CA-10): sesión 1 (`ls` de `/tmp/reservas_persistencia.db`, `inicializar`, `reservar` R-0001 y R-0002, `cancelar R-0002` con `s`, `listar`), reinicio de la terminal, sesión 2 (`listar`, `disponibilidad` MIC-01 y MIC-02, `reservar` R-0003, `listar`, `ls datos/`) | Etapa 6 (sin commit) | Los 13 pasos coincidieron con lo esperado: R-0001 activa y R-0002 cancelada antes y después del reinicio; MIC-01 ocupada, MIC-02 libre; nueva reserva R-0003; `datos/` solo con `inventario.csv` | Autor |
 
 ---
 

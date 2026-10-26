@@ -175,7 +175,7 @@ La versión inicial de esta especificación es el primer commit del repositorio.
 
 ## 2. Solución
 
-> Pendiente: se completa a medida que se construye (etapa 7 de [PROGRESO.md](PROGRESO.md)). Solo se incluirán salidas de comandos realmente ejecutados.
+> Pendiente: se completa a medida que se construye (etapa 7 de [PROGRESO.md](PROGRESO.md)). Solo se incluirán salidas de comandos realmente ejecutados. Ya está escrito el [procedimiento manual de persistencia](#procedimiento-manual-de-persistencia-ca-10) (etapa 6).
 
 Contenido previsto:
 
@@ -193,6 +193,109 @@ Contenido previsto:
 - **Pruebas:** `python -m pytest -v`.
 - **Procedimiento manual de persistencia** con resultados esperados y observados.
 - **Pendientes y limitaciones.**
+
+### Procedimiento manual de persistencia (CA-10)
+
+Comprueba que una reserva activa y una cancelada se conservan, con su estado, al cerrar la aplicación y la terminal y volver a ejecutarla (RF-07). Complementa el test automático `tests/test_persistencia.py::test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir`.
+
+- La base se crea en `/tmp/reservas_persistencia.db` mediante `RESERVAS_DB`, así que **no se toca `datos/reservas.db`**.
+- Las fechas son de 2099 porque la aplicación usa la hora real y no se puede reservar en el pasado.
+- Cada comando va seguido de `; echo "código: $?"`, que muestra su código de salida.
+
+**Sesión 1** (desde la carpeta del repositorio, con las dependencias instaladas):
+
+```bash
+ls /tmp/reservas_persistencia.db; echo "código: $?"
+export RESERVAS_DB=/tmp/reservas_persistencia.db
+.venv/bin/python -m reservas inicializar; echo "código: $?"
+.venv/bin/python -m reservas reservar MIC-01 --solicitante "Ana Prueba" --inicio "2099-11-03 10:00" --fin "2099-11-03 11:00"; echo "código: $?"
+.venv/bin/python -m reservas reservar MIC-02 --solicitante "Beto Prueba" --inicio "2099-11-03 10:00" --fin "2099-11-03 11:00"; echo "código: $?"
+.venv/bin/python -m reservas cancelar R-0002; echo "código: $?"
+.venv/bin/python -m reservas listar; echo "código: $?"
+```
+
+**Reinicio:** cerrar la terminal, abrir una nueva y volver a la carpeta del repositorio.
+
+**Sesión 2:**
+
+```bash
+export RESERVAS_DB=/tmp/reservas_persistencia.db
+.venv/bin/python -m reservas listar; echo "código: $?"
+.venv/bin/python -m reservas disponibilidad MIC-01 --desde "2099-11-03 10:00" --hasta "2099-11-03 11:00"; echo "código: $?"
+.venv/bin/python -m reservas disponibilidad MIC-02 --desde "2099-11-03 10:00" --hasta "2099-11-03 11:00"; echo "código: $?"
+.venv/bin/python -m reservas reservar MIC-02 --solicitante "Caro Prueba" --inicio "2099-11-03 10:00" --fin "2099-11-03 11:00"; echo "código: $?"
+.venv/bin/python -m reservas listar; echo "código: $?"
+ls datos/
+```
+
+| Paso | Comando | Resultado esperado | Resultado observado |
+|---|---|---|---|
+| 1 | `ls /tmp/reservas_persistencia.db` | El archivo no existe. Si existe, `inicializar` va a preguntar si se borran sus reservas: responder `s`. | `ls: no se puede acceder a '/tmp/reservas_persistencia.db': No existe el fichero o el directorio` (código 2, de `ls`). Coincide. |
+| 2 | `inicializar` | `Base de datos creada en /tmp/reservas_persistencia.db con las unidades del inventario.` Código 0. | Mismo mensaje. Código 0. Coincide. |
+| 3 | `reservar MIC-01 … Ana Prueba` | `Reserva creada: R-0001 (MIC-01, 2099-11-03 10:00 a 2099-11-03 11:00, Ana Prueba).` Código 0. | Mismo mensaje. Código 0. Coincide. |
+| 4 | `reservar MIC-02 … Beto Prueba` | `Reserva creada: R-0002 (MIC-02, 2099-11-03 10:00 a 2099-11-03 11:00, Beto Prueba).` Código 0. | Mismo mensaje. Código 0. Coincide. |
+| 5 | `cancelar R-0002`, responder `s` | Muestra R-0002 (MIC-02, Beto Prueba, `activa`), pregunta `¿Cancelar la reserva R-0002? (s/n):` y, tras `s`, `Reserva R-0002 cancelada.` Código 0. | Mostró R-0002 `activa`, `¿Cancelar la reserva R-0002? (s/n): s` y `Reserva R-0002 cancelada.` Código 0. Coincide. |
+| 6 | `listar` | R-0001 `activa` y R-0002 `cancelada`. Código 0. | R-0001 `activa` y R-0002 `cancelada`. Código 0. Coincide. |
+| 7 | Cerrar la terminal y abrir una nueva | — | El autor reinició la terminal. |
+| 8 | `listar` | Igual que en el paso 6: R-0001 `activa` y R-0002 `cancelada`. Código 0. | R-0001 `activa` y R-0002 `cancelada`. Código 0. Coincide. |
+| 9 | `disponibilidad MIC-01 …` | `La unidad MIC-01 está ocupada del 2099-11-03 10:00 al 2099-11-03 11:00.` y la tabla con R-0001. Código 0. | Mismo mensaje y tabla con R-0001. Código 0. Coincide. |
+| 10 | `disponibilidad MIC-02 …` | `La unidad MIC-02 está libre del 2099-11-03 10:00 al 2099-11-03 11:00.` (la cancelada no bloquea). Código 0. | Mismo mensaje. Código 0. Coincide. |
+| 11 | `reservar MIC-02 … Caro Prueba` | `Reserva creada: R-0003 (…)`: el ID de la cancelada no se reutiliza. Código 0. | `Reserva creada: R-0003 (MIC-02, 2099-11-03 10:00 a 2099-11-03 11:00, Caro Prueba).` Código 0. Coincide. |
+| 12 | `listar` | R-0001 `activa`, R-0002 `cancelada` y R-0003 `activa`. Código 0. | R-0001 `activa`, R-0002 `cancelada` y R-0003 `activa`. Código 0. Coincide. |
+| 13 | `ls datos/` | Solo `inventario.csv`: no se creó `datos/reservas.db`. | `inventario.csv`. Coincide. |
+
+Resultados observados: ejecución del autor, 2026-10-26, en dos sesiones de terminal separadas por un reinicio. Los 13 pasos coincidieron con lo esperado.
+
+Para borrar la base de prueba al terminar: `rm /tmp/reservas_persistencia.db`.
+
+<details>
+<summary>Salida obtenida por el agente al preparar el procedimiento (2026-10-26, con <code>RESERVAS_DB=/tmp/reservas_persistencia_agente.db</code>)</summary>
+
+Se ejecutaron los mismos comandos en dos shells distintos, con otra ruta para no dejar creada la base del procedimiento. En el paso 5 la respuesta `s` se pasó por la entrada estándar (`echo s | …`), por eso no aparece escrita después de la pregunta.
+
+Sesión 1:
+
+```
+Base de datos creada en /tmp/reservas_persistencia_agente.db con las unidades del inventario.
+[código de salida: 0]
+Reserva creada: R-0001 (MIC-01, 2099-11-03 10:00 a 2099-11-03 11:00, Ana Prueba).
+[código de salida: 0]
+Reserva creada: R-0002 (MIC-02, 2099-11-03 10:00 a 2099-11-03 11:00, Beto Prueba).
+[código de salida: 0]
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0002  MIC-02  Beto Prueba  2099-11-03 10:00  2099-11-03 11:00  activa
+¿Cancelar la reserva R-0002? (s/n): Reserva R-0002 cancelada.
+[código de salida: 0]
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0002  MIC-02  Beto Prueba  2099-11-03 10:00  2099-11-03 11:00  cancelada
+[código de salida: 0]
+```
+
+Sesión 2 (shell nuevo, `RESERVAS_DB` vacía antes del `export`):
+
+```
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0002  MIC-02  Beto Prueba  2099-11-03 10:00  2099-11-03 11:00  cancelada
+[código de salida: 0]
+La unidad MIC-01 está ocupada del 2099-11-03 10:00 al 2099-11-03 11:00. Reservas que la bloquean:
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+[código de salida: 0]
+La unidad MIC-02 está libre del 2099-11-03 10:00 al 2099-11-03 11:00.
+[código de salida: 0]
+Reserva creada: R-0003 (MIC-02, 2099-11-03 10:00 a 2099-11-03 11:00, Caro Prueba).
+[código de salida: 0]
+ID      Unidad  Solicitante  Inicio            Fin               Estado
+R-0001  MIC-01  Ana Prueba   2099-11-03 10:00  2099-11-03 11:00  activa
+R-0002  MIC-02  Beto Prueba  2099-11-03 10:00  2099-11-03 11:00  cancelada
+R-0003  MIC-02  Caro Prueba  2099-11-03 10:00  2099-11-03 11:00  activa
+[código de salida: 0]
+inventario.csv
+```
+
+</details>
 
 ---
 
@@ -248,7 +351,7 @@ Instrucciones incluidas en `CLAUDE.md` para este problema:
 Evidencia de uso:
 
 - **Adaptación 1 (turnos consecutivos):** [prueba de mutación en PROGRESO.md](PROGRESO.md#prueba-de-mutación-turnos-consecutivos): con `<=`/`>=` en la consulta de superposición fallan 6 tests; sin el filtro de reservas activas falla 1. Tests de turnos consecutivos en [`tests/test_superposicion.py`](tests/test_superposicion.py): `test_consigna_permite_mic01_de_11_a_12`, `test_turno_consecutivo_anterior_se_permite` y `test_disponibilidad_coincide_con_crear_reserva` (casos consecutivos).
-- **Adaptación 2 (persistencia):** pendiente, se enlazará en [PROGRESO.md](PROGRESO.md) a los commits y tests correspondientes.
+- **Adaptación 2 (persistencia):** la cancelación ejecuta `UPDATE` y ningún `DELETE` dentro de `BEGIN IMMEDIATE` … `COMMIT` (test `test_cancelar_usa_update_y_nunca_delete` en [`tests/test_cancelar_reserva.py`](tests/test_cancelar_reserva.py)); el autor verificó con `grep -rn -i "delete" reservas/` que `DELETE` solo aparece en un docstring ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 4). Una reserva activa y una cancelada siguen con su estado tras cerrar y reabrir la base (test `test_reserva_activa_y_cancelada_persisten_al_cerrar_y_reabrir` en [`tests/test_persistencia.py`](tests/test_persistencia.py)) y tras reiniciar la terminal ([procedimiento manual de persistencia](#procedimiento-manual-de-persistencia-ca-10), ejecutado por el autor).
 - **Adaptación 3 (el "ahora" como parámetro):** el autor verificó con `grep -rn "environ" reservas/` que la única variable de entorno que se lee es `RESERVAS_DB` ([Verificaciones ejecutadas en PROGRESO.md](PROGRESO.md#verificaciones-ejecutadas), etapa 2). Tests del camino `ahora=None` en [`tests/test_crear_reserva.py`](tests/test_crear_reserva.py): `test_ahora_none_acepta_una_reserva_en_2099` y `test_ahora_none_rechaza_una_reserva_en_2000`.
 
 ### 3.6 Retención del progreso
