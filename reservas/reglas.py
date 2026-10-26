@@ -83,11 +83,17 @@ def parsear_fecha(texto, campo):
         ) from None
 
 
-def _validar_unidad_e_intervalo(conexion, unidad, inicio, fin):
-    """RN-01, RN-03 y RN-04. Devuelve (unidad_id, inicio, fin) normalizados."""
+def _validar_unidad(conexion, unidad):
+    """RN-01: devuelve el ID de unidad normalizado (S-06)."""
     unidad_id = normalizar_unidad(unidad)
     if not persistencia.existe_unidad(conexion, unidad_id):
         raise ErrorValidacion(f"La unidad '{unidad}' no existe en el inventario.")
+    return unidad_id
+
+
+def _validar_unidad_e_intervalo(conexion, unidad, inicio, fin):
+    """RN-01, RN-03 y RN-04. Devuelve (unidad_id, inicio, fin) normalizados."""
+    unidad_id = _validar_unidad(conexion, unidad)
     inicio_dt = parsear_fecha(inicio, "inicio")
     fin_dt = parsear_fecha(fin, "fin")
     if inicio_dt >= fin_dt:
@@ -193,28 +199,54 @@ def buscar_reserva(conexion, reserva_id_texto):
     return reserva
 
 
+def obtener_reserva_cancelable(conexion, reserva_id_texto, ahora=None):
+    """Devuelve la reserva si se puede cancelar; si no, lanza el error.
+
+    Errores: no existe, ya estaba cancelada (RN-12) o ya empezó (S-19).
+    """
+    ahora = _normalizar_ahora(ahora)
+    reserva = buscar_reserva(conexion, reserva_id_texto)
+    reserva_id = formatear_id_reserva(reserva["id"])
+    if reserva["estado"] == "cancelada":
+        raise ErrorReservaYaCancelada(
+            f"La reserva {reserva_id} ya está "
+            f"cancelada (desde {reserva['cancelada_en']})."
+        )
+    if datetime.strptime(reserva["inicio"], FORMATO_FECHA) <= ahora:
+        raise ErrorValidacion(
+            f"No se puede cancelar la reserva {reserva_id}: ya empezó "
+            f"(inicio {reserva['inicio']})."
+        )
+    return reserva
+
+
 def cancelar_reserva(conexion, reserva_id_texto, ahora=None):
     """Cancela una reserva activa y devuelve la reserva actualizada.
 
     No borra el registro: cambia el estado a 'cancelada' y guarda
-    cancelada_en (RN-11). Si la reserva no existe, ya estaba cancelada
-    (RN-12) o ya empezó (S-19), lanza un error y no modifica nada.
+    cancelada_en (RN-11). Si la reserva no se puede cancelar, lanza el error
+    de obtener_reserva_cancelable y no modifica nada.
     """
     ahora = _normalizar_ahora(ahora)
     with persistencia.transaccion_inmediata(conexion):
-        reserva = buscar_reserva(conexion, reserva_id_texto)
-        reserva_id = formatear_id_reserva(reserva["id"])
-        if reserva["estado"] == "cancelada":
-            raise ErrorReservaYaCancelada(
-                f"La reserva {reserva_id} ya está "
-                f"cancelada (desde {reserva['cancelada_en']})."
-            )
-        if datetime.strptime(reserva["inicio"], FORMATO_FECHA) <= ahora:
-            raise ErrorValidacion(
-                f"No se puede cancelar la reserva {reserva_id}: ya empezó "
-                f"(inicio {reserva['inicio']})."
-            )
+        reserva = obtener_reserva_cancelable(conexion, reserva_id_texto, ahora=ahora)
         persistencia.marcar_cancelada(
             conexion, reserva["id"], ahora.strftime(FORMATO_REGISTRO)
         )
         return persistencia.obtener_reserva(conexion, reserva["id"])
+
+
+ESTADOS = ("activa", "cancelada")
+
+
+def listar_reservas(conexion, unidad=None, estado=None):
+    """Reservas guardadas, ordenadas por inicio y luego por ID (S-16).
+
+    Filtros opcionales: unidad (debe existir, RN-01) y estado.
+    """
+    unidad_id = _validar_unidad(conexion, unidad) if unidad is not None else None
+    if estado is not None and estado not in ESTADOS:
+        raise ErrorValidacion(
+            f"El estado '{estado}' no es válido (activa o cancelada)."
+        )
+    return persistencia.listar_reservas(conexion, unidad_id, estado)

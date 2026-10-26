@@ -188,3 +188,32 @@ def marcar_cancelada(conexion, reserva_id, cancelada_en):
         "WHERE id = ? AND estado = 'activa'",
         (cancelada_en, reserva_id),
     )
+
+
+def listar_reservas(conexion, unidad_id=None, estado=None):
+    """Reservas, opcionalmente filtradas, ordenadas por inicio y luego por ID."""
+    condiciones = []
+    parametros = []
+    if unidad_id is not None:
+        condiciones.append("unidad_id = ?")
+        parametros.append(unidad_id)
+    if estado is not None:
+        condiciones.append("estado = ?")
+        parametros.append(estado)
+    consulta = "SELECT * FROM reservas"
+    if condiciones:
+        consulta += " WHERE " + " AND ".join(condiciones)
+    consulta += " ORDER BY inicio, id"
+    return conexion.execute(consulta, parametros).fetchall()
+
+
+def contar_reservas_en(ruta):
+    """Cantidad de reservas guardadas en la base; 0 si no está inicializada."""
+    try:
+        conexion = abrir_base(ruta)
+    except ErrorBaseNoInicializada:
+        return 0
+    try:
+        return conexion.execute("SELECT COUNT(*) FROM reservas").fetchone()[0]
+    finally:
+        conexion.close()

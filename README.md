@@ -230,7 +230,7 @@ Definidos en [`.claude/settings.json`](.claude/settings.json):
 | Nivel | Acciones | Motivo |
 |---|---|---|
 | Permitido sin preguntar | Leer y buscar archivos; ejecutar pytest (`python -m pytest`, `pytest` y `.venv/bin/python -m pytest`); `git status`, `git diff`, `git log` | Acciones sin efectos sobre el código |
-| Requiere aprobación | Editar o crear archivos; ejecutar la aplicación; `git add`, `git commit`; instalar paquetes | El humano revisa cada cambio antes de aceptarlo |
+| Requiere aprobación | Editar o crear archivos; ejecutar la aplicación (`python -m reservas` y `.venv/bin/python -m reservas`); `git add`, `git commit`; instalar paquetes | El humano revisa cada cambio antes de aceptarlo |
 | Prohibido | `git push`; `rm -rf`; leer archivos `.env` | La publicación la hace el humano; se evitan borrados y lectura de secretos |
 
 **Modo de inicio:** `"defaultMode": "default"` hace que Claude Code arranque en modo manual en este proyecto. No impide cambiar de modo durante la sesión, y lo puede reemplazar una configuración de mayor prioridad (por ejemplo, `.claude/settings.local.json` o un modo indicado al iniciar Claude Code). Las reglas ask siguen vigentes aunque cambie el modo: en el [incidente de permisos](PROGRESO.md#entorno-evidencia), la regla de `git commit` pidió aprobación con el modo automático activo.

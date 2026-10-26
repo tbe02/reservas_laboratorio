@@ -210,3 +210,35 @@ Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hec
 - **Alternativas:** permitir cancelar siempre; permitir cancelar solo las que no terminaron.
 - **Consecuencias:** el historial de reservas ya empezadas o cumplidas no se altera. El orden de los errores es: inexistente, ya cancelada, ya empezó.
 - **Evidencia:** test `tests/test_cancelar_reserva.py::test_cancelar_una_reserva_que_ya_empezo_da_error_y_no_cambia_nada` (justo al inicio, en curso y terminada) y `::test_cancelar_una_reserva_futura_se_permite`.
+
+## D-27 · `listar` con filtros: unidad desconocida y resultados vacíos
+
+- **Contexto:** RF-05 y S-16 no aclaraban qué pasa si `--unidad` no existe ni si `No hay reservas.` aplica también cuando un filtro no encuentra nada. Surgió en la etapa 5; la propuso el agente y la aprobó el autor.
+- **Decisión:** `listar --unidad` con una unidad que no existe en el inventario da error y código 1 (RN-01). Un filtro válido sin resultados muestra `No hay reservas.` y devuelve 0.
+- **Alternativas:** tratar la unidad desconocida como un filtro sin resultados; usar un mensaje distinto para "sin resultados con filtros".
+- **Consecuencias:** un ID de unidad mal escrito no se confunde con "no hay reservas".
+- **Evidencia:** tests `tests/test_cli.py::test_listar_con_unidad_desconocida_da_error` y `::test_listar_filtra_por_unidad_y_estado`.
+
+## D-28 · Confirmación: sin distinguir mayúsculas ni espacios; sin entrada es "no"
+
+- **Contexto:** S-08 enumera `s`, `si` y `sí` como afirmativos, pero no dice si importan las mayúsculas, los espacios o qué pasa si no hay entrada. Surgió en la etapa 5; la propuso el agente y la aprobó el autor.
+- **Decisión:** se recortan los espacios y se ignoran las mayúsculas (`S`, ` Sí ` confirman). Si no hay entrada (fin de archivo o Ctrl+C), se toma como "no".
+- **Alternativas:** aceptar solo las tres respuestas exactas en minúsculas.
+- **Consecuencias:** cualquier otra respuesta sigue siendo "no" (por ejemplo `sii` o `no`), así que nunca se borra ni se cancela por error.
+- **Evidencia:** tests `tests/test_cli.py::test_cancelar_con_respuesta_afirmativa`, `::test_cancelar_con_otra_respuesta_no_modifica_nada` y `::test_cancelar_sin_entrada_disponible_se_toma_como_no`.
+
+## D-29 · `cancelar` valida antes de pedir confirmación
+
+- **Contexto:** RF-04 dice que `cancelar` muestra la reserva y pide confirmación, pero no qué hacer si la reserva no se puede cancelar. Surgió en la etapa 5; la propuso el agente y la aprobó el autor.
+- **Decisión:** si la reserva no existe, ya está cancelada o ya empezó, se muestra el error sin preguntar. Si se puede cancelar, se muestra y se pide confirmación; al confirmar, `cancelar_reserva` vuelve a validar dentro de la transacción.
+- **Alternativas:** preguntar siempre y validar solo al confirmar.
+- **Consecuencias:** no se pide confirmación en vano. La validación está en una sola función de reglas (`obtener_reserva_cancelable`), usada por la CLI y por `cancelar_reserva`.
+- **Evidencia:** tests `tests/test_cli.py::test_cancelar_ya_cancelada_da_error_sin_preguntar`, `::test_cancelar_inexistente_da_error_sin_preguntar` y `::test_cancelar_reserva_que_ya_empezo_da_error_sin_preguntar`.
+
+## D-30 · Errores de argumentos con código 1; `main()` con parámetros solo para pruebas
+
+- **Contexto:** argparse sale con código 2 y mensajes en inglés ante argumentos inválidos; S-10 pide 1 para cualquier error y `CLAUDE.md` pide mensajes en español. Además, las pruebas de la CLI necesitan fijar el "ahora" y simular respuestas. Surgió en la etapa 5; la propuso el agente y la aprobó el autor.
+- **Decisión:** los errores de argumentos devuelven 1 y los mensajes más comunes de argparse se traducen (los demás pueden quedar en inglés). `main(argv, ahora=None, leer_respuesta=input)` acepta `ahora` y `leer_respuesta` solo para las pruebas: la CLI real siempre usa la hora actual y la entrada estándar, y no hay forma de fijar el "ahora" desde argumentos ni variables de entorno (D-08).
+- **Alternativas:** mantener el código 2 de argparse; probar la CLI solo con procesos aparte y hora real.
+- **Consecuencias:** los criterios de la CLI se prueban con fecha fija. La traducción de argparse es parcial.
+- **Evidencia:** tests `tests/test_cli.py::test_argumentos_invalidos_devuelven_1_con_mensaje_en_espanol` y el resto de `tests/test_cli.py`.

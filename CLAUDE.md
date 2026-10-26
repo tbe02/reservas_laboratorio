@@ -37,7 +37,8 @@ La especificación completa está en `README.md`, sección 1. Es la fuente de ve
 
 - Las funciones que dependen de la hora actual reciben `ahora=None` como parámetro opcional; si es `None`, usan la hora real de Buenos Aires.
 - **Prohibido** leer el "ahora" de variables de entorno o de argumentos de la CLI: el usuario no debe poder saltear la regla de fechas pasadas.
-- Los tests pasan siempre una fecha fija. Usar fechas de 2030 en ejemplos y tests de CLI.
+- Los tests pasan siempre una fecha fija como `ahora` y usan fechas de 2030.
+- Excepción: los tests que usan la hora real (camino `ahora=None` y tests de punta a punta de la CLI) y los ejemplos manuales del README usan fechas de 2099, para que sigan siendo futuras después de 2030.
 
 ## Pruebas
 
@@ -46,6 +47,7 @@ La especificación completa está en `README.md`, sección 1. Es la fuente de ve
 - Antes de dar una etapa por terminada, ejecutá `.venv/bin/python -m pytest -v` y mostrá la salida real.
 - Ejecutá pytest siempre con `.venv/bin/python -m pytest -v`: nunca dentro de un pipe ni con la salida filtrada (`| tail`, `| grep`, etc.), porque un pipe oculta el código de salida de pytest.
 - Si pytest no corre o falla, no se commitea.
+- La app y pytest se invocan siempre con el comando literal (`.venv/bin/python -m reservas …`, `.venv/bin/python -m pytest -v`), nunca mediante variables de shell (ej. `P=.venv/bin/python` y `$P -m reservas`) ni funciones de shell, para que se apliquen las reglas de permisos de `.claude/settings.json`.
 
 ## Honestidad en los resultados
 

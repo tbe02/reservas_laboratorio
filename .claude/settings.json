@@ -16,6 +16,7 @@
       "Edit",
       "Write",
       "Bash(python -m reservas:*)",
+      "Bash(.venv/bin/python -m reservas:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(pip install:*)",
