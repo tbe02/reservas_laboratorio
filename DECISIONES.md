@@ -194,3 +194,19 @@ Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hec
 - **Alternativas:** mostrar solo "no reservable" y omitir las reservas que bloquean.
 - **Consecuencias:** el usuario ve toda la información del intervalo. `consultar_disponibilidad` ya devuelve `en_pasado` y `conflictos` por separado, así que no hace falta cambiar la capa de reglas. Se refleja en la especificación como S-18 y CA-17.
 - **Evidencia:** pendiente (CA-17, etapa 5).
+
+## D-25 · Formato de ID de reserva aceptado
+
+- **Contexto:** S-06 dice que el ID de reserva se acepta sin distinguir mayúsculas, pero no aclara si los ceros a la izquierda son obligatorios ni qué pasa con otros formatos. Surgió en la etapa 4; la propuso el agente y la aprobó el autor.
+- **Decisión:** se acepta `R-` seguido de uno o más dígitos, sin distinguir mayúsculas y sin recortar espacios (como las fechas, D-23). `R-1` y `R-0001` se refieren a la misma reserva. Cualquier otro texto (`0001`, `R0001`, `X-0001`, `" R-0001"`) da el error "no es un ID de reserva válido".
+- **Alternativas:** exigir exactamente el formato mostrado (cuatro dígitos o más); aceptar también el número solo (`1`).
+- **Consecuencias:** el usuario puede escribir el ID corto; los mensajes siempre lo muestran como `R-0001`.
+- **Evidencia:** `reservas/reglas.py` (`parsear_id_reserva`), tests `tests/test_cancelar_reserva.py::test_r_1_y_r_0001_son_la_misma_reserva` y `::test_id_mal_escrito_da_error_y_no_cambia_nada`.
+
+## D-26 · No se cancelan reservas que ya empezaron
+
+- **Contexto:** la especificación no decía si se puede cancelar una reserva cuyo horario ya empezó o terminó. Surgió en la etapa 4; el agente lo planteó como pregunta y el autor decidió.
+- **Decisión:** si el inicio de la reserva es igual o anterior al momento actual, `cancelar` da error y no modifica nada (S-19, CA-18). Se usa el mismo criterio que para crear (S-03: inicio igual al "ahora" cuenta como pasado).
+- **Alternativas:** permitir cancelar siempre; permitir cancelar solo las que no terminaron.
+- **Consecuencias:** el historial de reservas ya empezadas o cumplidas no se altera. El orden de los errores es: inexistente, ya cancelada, ya empezó.
+- **Evidencia:** test `tests/test_cancelar_reserva.py::test_cancelar_una_reserva_que_ya_empezo_da_error_y_no_cambia_nada` (justo al inicio, en curso y terminada) y `::test_cancelar_una_reserva_futura_se_permite`.

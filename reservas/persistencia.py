@@ -179,3 +179,12 @@ def obtener_reserva(conexion, reserva_id):
     return conexion.execute(
         "SELECT * FROM reservas WHERE id = ?", (reserva_id,)
     ).fetchone()
+
+
+def marcar_cancelada(conexion, reserva_id, cancelada_en):
+    """Pasa una reserva activa a 'cancelada' (RN-11). Nunca borra la fila."""
+    conexion.execute(
+        "UPDATE reservas SET estado = 'cancelada', cancelada_en = ? "
+        "WHERE id = ? AND estado = 'activa'",
+        (cancelada_en, reserva_id),
+    )

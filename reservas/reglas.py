@@ -1,4 +1,4 @@
-"""Reglas de negocio: validaciones, disponibilidad y creación de reservas.
+"""Reglas de negocio: validaciones, disponibilidad, creación y cancelación.
 
 Las fechas se manejan como `datetime` sin zona, interpretadas siempre en
 hora de Buenos Aires (S-01). En la base se guardan como texto con formato
@@ -11,13 +11,19 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from reservas import persistencia
-from reservas.errores import ErrorSuperposicion, ErrorValidacion
+from reservas.errores import (
+    ErrorReservaNoEncontrada,
+    ErrorReservaYaCancelada,
+    ErrorSuperposicion,
+    ErrorValidacion,
+)
 
 ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
 FORMATO_FECHA = "%Y-%m-%d %H:%M"
 FORMATO_REGISTRO = "%Y-%m-%d %H:%M:%S"
 # strptime acepta "2030-1-3 9:00"; el formato exige ceros a la izquierda.
 PATRON_FECHA = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")
+PATRON_ID_RESERVA = re.compile(r"R-([0-9]+)", re.IGNORECASE)
 
 
 def ahora_buenos_aires():
@@ -35,6 +41,19 @@ def _normalizar_ahora(ahora):
 
 def formatear_id_reserva(reserva_id):
     return f"R-{reserva_id:04d}"
+
+
+def parsear_id_reserva(texto):
+    """Convierte 'R-0001' (sin distinguir mayúsculas, S-06) en 1.
+
+    Lanza ErrorReservaNoEncontrada si el texto no tiene forma de ID.
+    """
+    coincidencia = PATRON_ID_RESERVA.fullmatch(texto)
+    if not coincidencia:
+        raise ErrorReservaNoEncontrada(
+            f"'{texto}' no es un ID de reserva válido (ej. R-0001)."
+        )
+    return int(coincidencia.group(1))
 
 
 def normalizar_unidad(unidad):
@@ -161,3 +180,41 @@ def crear_reserva(conexion, unidad, solicitante, inicio, fin, ahora=None):
             disponibilidad.fin.strftime(FORMATO_FECHA),
             ahora.strftime(FORMATO_REGISTRO),
         )
+
+
+def buscar_reserva(conexion, reserva_id_texto):
+    """Devuelve la reserva con ese ID ('R-0001'); lanza ErrorReservaNoEncontrada."""
+    reserva_id = parsear_id_reserva(reserva_id_texto)
+    reserva = persistencia.obtener_reserva(conexion, reserva_id)
+    if reserva is None:
+        raise ErrorReservaNoEncontrada(
+            f"No existe la reserva {formatear_id_reserva(reserva_id)}."
+        )
+    return reserva
+
+
+def cancelar_reserva(conexion, reserva_id_texto, ahora=None):
+    """Cancela una reserva activa y devuelve la reserva actualizada.
+
+    No borra el registro: cambia el estado a 'cancelada' y guarda
+    cancelada_en (RN-11). Si la reserva no existe, ya estaba cancelada
+    (RN-12) o ya empezó (S-19), lanza un error y no modifica nada.
+    """
+    ahora = _normalizar_ahora(ahora)
+    with persistencia.transaccion_inmediata(conexion):
+        reserva = buscar_reserva(conexion, reserva_id_texto)
+        reserva_id = formatear_id_reserva(reserva["id"])
+        if reserva["estado"] == "cancelada":
+            raise ErrorReservaYaCancelada(
+                f"La reserva {reserva_id} ya está "
+                f"cancelada (desde {reserva['cancelada_en']})."
+            )
+        if datetime.strptime(reserva["inicio"], FORMATO_FECHA) <= ahora:
+            raise ErrorValidacion(
+                f"No se puede cancelar la reserva {reserva_id}: ya empezó "
+                f"(inicio {reserva['inicio']})."
+            )
+        persistencia.marcar_cancelada(
+            conexion, reserva["id"], ahora.strftime(FORMATO_REGISTRO)
+        )
+        return persistencia.obtener_reserva(conexion, reserva["id"])

@@ -55,7 +55,7 @@ Python 3.14.8
 | 1 | "Etapa 1: creá la estructura del paquete `reservas/` y la capa de persistencia en SQLite según el esquema de la sección 1 del README. Incluí la carga del inventario de las 5 unidades y requirements.txt con pytest en versión fija. Escribí tests de que el inventario se carga correctamente." |
 | 2 | "Etapa 2: implementá crear_reserva con todas las validaciones de la sección 1 (unidad existente, solicitante no vacío, fechas válidas, inicio < fin, no en el pasado). El "ahora" se recibe como parámetro opcional, como dice CLAUDE.md. Tests para cada caso inválido y para una creación válida." |
 | 3 | "Etapa 3: implementá la detección de superposición y la consulta de disponibilidad usando UNA sola función compartida. Tests obligatorios: el ejemplo de la consigna (MIC-01 10-11 rechaza 10:30-11:30 y permite 11-12), MIC-02 10-11 permitido con MIC-01 ocupado, y que disponibilidad dé el mismo resultado que crear_reserva." |
-| 4 | |
+| 4 | "Etapa 4: implementá cancelar_reserva. No borra el registro: cambia el estado y guarda cancelada_en. Error claro si no existe o ya está cancelada. Tests: el registro se conserva, el horario se libera (se puede volver a reservar) y la doble cancelación da error." |
 | 5 | |
 | 6 | |
 | 7 | |
@@ -105,6 +105,20 @@ Python 3.14.8
 - **Decisiones:** D-24 (un intervalo en el pasado y ocupado muestra ambas cosas en `disponibilidad`), planteada por el agente como pregunta y decidida por el autor; se aplica en la etapa 5.
 - **Pendientes:** el test de que una reserva cancelada no bloquea simula la cancelación con un `UPDATE` directo; la cancelación real llega en la etapa 4 (CA-07). Aplicar D-24 en la CLI (etapa 5).
 
+### Etapa 4 · 2026-10-26
+- **Hecho:** `reglas.cancelar_reserva(conexion, reserva_id_texto, ahora=None)`. Dentro de `BEGIN IMMEDIATE` busca la reserva, verifica que esté activa y la pasa a `cancelada` con `cancelada_en` (hora de Buenos Aires o el `ahora` recibido) mediante `persistencia.marcar_cancelada`, que hace un `UPDATE`; nunca `DELETE` (RN-11). Devuelve la reserva actualizada. Errores nuevos: `ErrorReservaNoEncontrada` (ID inexistente o mal escrito) y `ErrorReservaYaCancelada`; en ambos casos no se modifica nada (RN-12). El ID se acepta sin distinguir mayúsculas (`r-0001`, S-06) mediante `parsear_id_reserva`; `buscar_reserva` queda disponible para que la CLI muestre la reserva antes de confirmar (RF-04, etapa 5). El test de la etapa 3 `test_reserva_cancelada_no_bloquea` ahora usa la cancelación real en lugar del `UPDATE` simulado.
+- **Archivos:** `reservas/reglas.py`, `reservas/persistencia.py`, `reservas/errores.py`, `tests/test_cancelar_reserva.py` (nuevo), `tests/test_superposicion.py`.
+- **Pytest (informado por el agente):** `.venv/bin/python -m pytest -v` → 106 passed in 0.34s (16 de `test_cancelar_reserva.py`, 33 de `test_superposicion.py`, 48 de `test_crear_reserva.py` y 9 de `test_persistencia.py`).
+- **Tests pedidos:** registro conservado (`test_cancelar_conserva_el_registro_y_sus_datos`), horario liberado y nuevo ID sin reutilizar el cancelado (`test_cancelar_libera_el_horario`, CA-07) y doble cancelación con error sin cambios (`test_doble_cancelacion_da_error_y_no_cambia_nada`, CA-08). Además: reserva inexistente, IDs mal escritos, que solo cambie la reserva indicada y, con `set_trace_callback`, que la cancelación ejecute `UPDATE` y ningún `DELETE` dentro de `BEGIN IMMEDIATE` … `COMMIT`.
+- **Comprobación del agente:** `grep -rn --include='*.py' -i "delete" reservas/ tests/` → solo el docstring de `persistencia.py` ("Nunca se ejecuta DELETE…") y el test que lo verifica.
+- **Pytest (ejecutado por el autor):** `.venv/bin/python -m pytest -v` → 106 passed in 0.32s (versión anterior a los cambios de D-25 y D-26).
+- **Revisión humana:** se revisó el informe, el UPDATE de cancelación y el test de la secuencia; se verificó con grep que no hay DELETE; se aprobó D-25 y se decidió D-26.
+- **Decisiones:** D-25 (formato de ID aceptado: `R-1` = `R-0001`), propuesta por el agente y aprobada por el autor. D-26 (no se cancelan reservas que ya empezaron), planteada por el agente como pregunta y decidida por el autor; reflejada en la especificación como S-19 y CA-18 (RF-04 remite a S-19). Ambas agregadas a `DECISIONES.md`.
+- **Cambios tras la revisión:** `cancelar_reserva` rechaza con `ErrorValidacion` una reserva cuyo inicio es igual o anterior al "ahora" (D-26), sin modificar nada. Tests nuevos: `test_r_1_y_r_0001_son_la_misma_reserva` (D-25), `test_cancelar_una_reserva_que_ya_empezo_da_error_y_no_cambia_nada` (justo al inicio, en curso y terminada) y `test_cancelar_una_reserva_futura_se_permite`, todos con `ahora` fijo.
+- **Pytest después de los cambios (agente):** `.venv/bin/python -m pytest -v` → 111 passed in 0.36s (21 de `test_cancelar_reserva.py`).
+- **Pytest sobre la versión final (autor, previo al commit):** `.venv/bin/python -m pytest -v` → 111 passed in 0.33s.
+- **Pendientes:** confirmación s/n y presentación en la CLI (etapa 5).
+
 ---
 
 ## Verificaciones ejecutadas
@@ -120,6 +134,9 @@ Solo comprobaciones realmente ejecutadas por el autor. Si algo falló o no se ej
 | 2026-10-26 | `python -m pytest -v` | Etapa 3 | 90 passed in 0.27s (Python 3.14.8, pytest 9.1.1) | Autor |
 | 2026-10-26 | `git status` después de la prueba de mutación | Etapa 3 | Solo cambios de la etapa 3 (`PROGRESO.md`, `errores.py`, `persistencia.py`, `reglas.py` y `tests/test_superposicion.py` nuevo); no quedaron restos de la mutación | Autor |
 | 2026-10-26 | `grep -n "inicio <\|fin >" reservas/persistencia.py` | Etapa 3 | Líneas 170-171: `AND inicio < :fin_nuevo` y `AND fin > :inicio_nuevo` (estrictas); línea 35: `CHECK (inicio < fin)` | Autor |
+| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 4 (antes de D-25 y D-26) | 106 passed in 0.32s | Autor |
+| 2026-10-26 | `grep -rn -i "delete" reservas/` | Etapa 4 | Solo el docstring de `reservas/persistencia.py:3` ("Nunca se ejecuta DELETE sobre `reservas`") y el `.pyc` compilado. No hay `DELETE` en el código. | Autor |
+| 2026-10-26 | `.venv/bin/python -m pytest -v` | Etapa 4, versión final (previa al commit) | 111 passed in 0.33s | Autor |
 
 ---
 

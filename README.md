@@ -60,7 +60,7 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | RF-01 | `unidades` muestra las 5 unidades del inventario. |
 | RF-02 | `disponibilidad UNIDAD --desde FECHA --hasta FECHA` indica si la unidad está libre en el intervalo y, si no lo está, lista las reservas activas que la bloquean. Libre, ocupada o no reservable son resultados informativos (ver S-15 y S-18). |
 | RF-03 | `reservar UNIDAD --solicitante NOMBRE --inicio FECHA --fin FECHA` crea una reserva activa y devuelve su ID (`R-0001`, `R-0002`, …). |
-| RF-04 | `cancelar ID` muestra la reserva, pide confirmación (s/n) y la marca como cancelada sin borrarla. |
+| RF-04 | `cancelar ID` muestra la reserva, pide confirmación (s/n) y la marca como cancelada sin borrarla. Solo se pueden cancelar reservas que todavía no empezaron (ver S-19). |
 | RF-05 | `listar [--unidad UNIDAD] [--estado activa\|cancelada]` muestra las reservas guardadas con las columnas ID, unidad, solicitante, inicio, fin y estado, ordenadas por inicio y luego por ID (ver S-16). |
 | RF-06 | `inicializar` crea la base y carga el inventario. Si ya existen reservas, informa cuántas hay, advierte que se borrarán y pide confirmación (s/n). Si no hay reservas, crea o recrea la base sin preguntar e informa que se creó (ver S-13 y S-14). |
 | RF-07 | Las reservas y sus estados se conservan al cerrar y volver a ejecutar la aplicación. |
@@ -106,6 +106,7 @@ Cada ID identifica una unidad física distinta. El inventario se versiona en [`d
 | S-16 | **Salida de `listar`:** ordena por inicio ascendente y, si empatan, por ID. Columnas: ID, unidad, solicitante, inicio, fin, estado. Si no hay reservas, muestra `No hay reservas.` y devuelve 0. |
 | S-17 | **Base sin tablas:** si el archivo de la base existe pero no tiene las tablas, se trata como base no inicializada (S-09). |
 | S-18 | **Disponibilidad en el pasado y ocupada:** si el inicio del intervalo ya pasó y además hay reservas activas que se superponen, `disponibilidad` informa las dos cosas: que el intervalo no es reservable por estar en el pasado y las reservas que lo bloquean. Devuelve 0 (S-15). |
+| S-19 | **Cancelar una reserva que ya empezó:** si el inicio de la reserva es igual o anterior al momento actual (en curso o terminada), `cancelar` produce un error y no modifica nada. |
 
 ### 1.7 Criterios de aceptación
 
@@ -130,6 +131,7 @@ Cada criterio se verifica con una prueba automática, salvo indicación.
 | CA-15 | `listar` muestra las reservas ordenadas por inicio y luego por ID, con las columnas de S-16. Sin reservas, muestra `No hay reservas.` y devuelve 0. | Automática |
 | CA-16 | Con un archivo de base existente pero sin tablas, los comandos distintos de `inicializar` muestran el error de base no inicializada y devuelven 1. | Automática |
 | CA-17 | Con un intervalo en el pasado que además se superpone con una reserva activa, `disponibilidad` informa que no es reservable, lista la reserva que lo bloquea y devuelve 0. | Automática |
+| CA-18 | Cancelar una reserva cuyo inicio es igual o anterior al momento actual da error y no cambia nada; una reserva que todavía no empezó se cancela normalmente. | Automática |
 
 ### 1.8 Modelo de datos (SQLite)
 

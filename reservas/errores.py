@@ -17,6 +17,14 @@ class ErrorSuperposicion(ErrorReservas):
         self.conflictos = conflictos
 
 
+class ErrorReservaNoEncontrada(ErrorReservas):
+    """No hay ninguna reserva con ese ID (RN-12)."""
+
+
+class ErrorReservaYaCancelada(ErrorReservas):
+    """La reserva ya estaba cancelada (RN-12)."""
+
+
 class ErrorBaseNoInicializada(ErrorReservas):
     """La base no existe o no tiene las tablas (S-09, S-17)."""
 

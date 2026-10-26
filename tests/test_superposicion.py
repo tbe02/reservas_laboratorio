@@ -4,6 +4,7 @@ import pytest
 
 from reservas.errores import ErrorReservas, ErrorSuperposicion, ErrorValidacion
 from reservas.reglas import (
+    cancelar_reserva,
     consultar_disponibilidad,
     crear_reserva,
     formatear_id_reserva,
@@ -83,12 +84,7 @@ def test_error_de_superposicion_indica_la_reserva_que_bloquea(mic01_ocupado):
 
 
 def test_reserva_cancelada_no_bloquea(mic01_ocupado):
-    # La cancelación real llega en la etapa 4; acá se simula con el mismo
-    # UPDATE que hará cancelar, para probar el filtro estado = 'activa'.
-    mic01_ocupado.execute(
-        "UPDATE reservas SET estado = 'cancelada', "
-        "cancelada_en = '2030-11-01 09:30:00' WHERE id = 1"
-    )
+    cancelar_reserva(mic01_ocupado, "R-0001", ahora=AHORA)
     assert disponibilidad(mic01_ocupado, "MIC-01", "10:30", "11:30").reservable
     reservar(mic01_ocupado, "MIC-01", "10:30", "11:30")
     assert contar_reservas(mic01_ocupado) == 2
