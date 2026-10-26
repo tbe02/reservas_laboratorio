@@ -45,7 +45,7 @@ Python 3.14.8
 | 3 | Superposición y disponibilidad | Hecho | `4dc7f8d` |
 | 4 | Cancelación | Hecho | `0665a5d` |
 | 5 | CLI (comandos, confirmaciones, códigos de salida) | Hecho | `fb8f240` |
-| 6 | Persistencia (test y procedimiento manual) | Pendiente | |
+| 6 | Persistencia (test y procedimiento manual) | Hecho | `507ea55` |
 | 7 | Completar sección 2 del README | Pendiente | |
 
 ### Prompts de cada etapa (resumen)
