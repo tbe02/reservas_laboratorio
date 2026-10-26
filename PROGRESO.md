@@ -46,7 +46,7 @@ Python 3.14.8
 | 4 | Cancelación | Hecho | `0665a5d` |
 | 5 | CLI (comandos, confirmaciones, códigos de salida) | Hecho | `fb8f240` |
 | 6 | Persistencia (test y procedimiento manual) | Hecho | `507ea55` |
-| 7 | Completar sección 2 del README | Pendiente | |
+| 7 | Completar sección 2 del README | Hecho | `4c01201` |
 
 ### Prompts de cada etapa (resumen)
 
