@@ -27,6 +27,7 @@ Python 3.14.8
 - **Modelo:** Claude Opus 5.5 (`claude-opus-5-5`). Esfuerzo alto: no aparece en `/status`, pero la interfaz de Claude Code muestra el indicador `high · /effort`.
 - **Configuración del proyecto:** "Shared project settings" confirma que se aplica `.claude/settings.json` del repositorio.
 - **Modo de permisos:** se trabaja en el modo normal (pide aprobación antes de editar). El modo automático está disponible pero **no se usa**.
+- **Incidente de permisos:** durante la etapa 1 el modo automático quedó activado sin intención. La regla ask de `Bash(git commit:*)` en `.claude/settings.json` igual obligó a pedir aprobación para el commit (mensaje: 'Ask rule Bash(git commit:*) overrides auto mode for this command'). Se volvió al modo normal antes de la etapa 2.
 - **MCP:** 1 servidor conectado, `claude.ai Claude Docs` (8 herramientas), que proviene de la cuenta de claude.ai y no de la configuración del repositorio. No se usa en este proyecto: no se le pide al agente que lo utilice y todo el trabajo queda en archivos versionados del repositorio.
 - **Entorno de Python:** entorno virtual `.venv` creado con `python3 -m venv .venv` y activado antes de abrir Claude Code.
 ---
