@@ -120,3 +120,27 @@ def listar_unidades(conexion):
     return conexion.execute(
         "SELECT id, equipo FROM unidades ORDER BY rowid"
     ).fetchall()
+
+
+def existe_unidad(conexion, unidad_id):
+    fila = conexion.execute(
+        "SELECT 1 FROM unidades WHERE id = ?", (unidad_id,)
+    ).fetchone()
+    return fila is not None
+
+
+def insertar_reserva(conexion, unidad_id, solicitante, inicio, fin, creada_en):
+    """Inserta una reserva activa y devuelve su ID numérico."""
+    cursor = conexion.execute(
+        "INSERT INTO reservas (unidad_id, solicitante, inicio, fin, creada_en) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (unidad_id, solicitante, inicio, fin, creada_en),
+    )
+    return cursor.lastrowid
+
+
+def obtener_reserva(conexion, reserva_id):
+    """Devuelve la reserva con ese ID numérico, o None si no existe."""
+    return conexion.execute(
+        "SELECT * FROM reservas WHERE id = ?", (reserva_id,)
+    ).fetchone()

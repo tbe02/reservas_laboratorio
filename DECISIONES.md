@@ -170,3 +170,19 @@ Las decisiones D-16 a D-20 surgieron de la **revisión de la especificación hec
 - **Alternativas:** calcular ambas rutas desde la carpeta actual.
 - **Consecuencias:** ejecutar desde otra carpeta no crea una base suelta en otro lugar y el inventario se encuentra igual.
 - **Evidencia:** `reservas/persistencia.py` (`RAIZ_PROYECTO`), test `tests/test_persistencia.py::test_ruta_base_por_defecto_es_datos_reservas_db`.
+
+## D-22 · Interpretación del parámetro `ahora`
+
+- **Contexto:** la especificación indica que `ahora` es un parámetro opcional, pero no aclara su zona horaria. Surgió en la etapa 2; la propuso el agente y la aprobó el autor.
+- **Decisión:** internamente se trabaja con fechas sin zona, en hora de Buenos Aires. Un `ahora` sin zona se interpreta como hora de Buenos Aires; uno con zona se convierte a Buenos Aires. `creada_en` se guarda con esa hora.
+- **Alternativas:** trabajar con fechas con zona en todo el código; aceptar solo `ahora` sin zona.
+- **Consecuencias:** los tests pueden usar `datetime(2030, 11, 1, 9, 0)` sin zona, y un `ahora` en UTC no se compara mal.
+- **Evidencia:** `reservas/reglas.py` (`_normalizar_ahora`), test `tests/test_crear_reserva.py::test_ahora_con_zona_horaria_se_convierte_a_buenos_aires`.
+
+## D-23 · Las fechas no se recortan
+
+- **Contexto:** S-06 indica recortar los espacios solo del solicitante; no dice nada sobre las fechas. Surgió en la etapa 2; el agente lo señaló y el autor decidió mantenerlo.
+- **Decisión:** las fechas no se recortan. Una fecha con espacios al inicio o al final (ej. `" 2030-11-03 10:00"`) se rechaza por no respetar el formato.
+- **Alternativas:** recortar las fechas igual que el solicitante.
+- **Consecuencias:** el formato es estricto y coincide con RN-03 y S-02. El usuario tiene que escribir la fecha exacta.
+- **Evidencia:** test `tests/test_crear_reserva.py::test_formato_de_fecha_invalido` (caso `" 2030-11-03 10:00"`).

@@ -5,6 +5,10 @@ class ErrorReservas(Exception):
     """Base de todos los errores esperables del sistema."""
 
 
+class ErrorValidacion(ErrorReservas):
+    """Los datos ingresados no cumplen una regla de negocio."""
+
+
 class ErrorBaseNoInicializada(ErrorReservas):
     """La base no existe o no tiene las tablas (S-09, S-17)."""
 
